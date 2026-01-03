@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::sync::{Mutex, MutexGuard, OnceLock, RwLock};
 use std::{ffi, ptr};
 
@@ -10,7 +9,7 @@ use lua53_sys as lua;
 use sdl2_sys as sdl;
 
 use crate::types::{ColorPair, DFHackPen};
-use crate::{control, debugger, df, lang, logo, markup, memory, screen, text, translation, translator, types};
+use crate::{control, df, lang, logo, markup, memory, screen, text, translation, translator, types};
 use translation::{TranslationInput, TranslationRequest};
 
 fn addst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: u8, space: i32) {
@@ -309,11 +308,6 @@ fn update_all(renderer_ptr: *const ffi::c_void) {
     }
   }
 
-  if control::is_enabled() {
-    debugger::resize();
-    debugger::update();
-  }
-
   screen::clear_screens();
   control::toggle_enabled();
   control::do_reset_if_requested();
@@ -435,84 +429,8 @@ fn dfhack_paint_string(pen_str: *const ffi::c_void, x: i32, y: i32, string_ptr: 
   ret
 }
 
-static VISITED: OnceLock<RwLock<HashSet<String>>> = OnceLock::new();
-static TRANSLATED: OnceLock<RwLock<HashSet<String>>> = OnceLock::new();
-
-fn log_text(request: &translation::TranslationRequest, backtrace: &str) {
-  // // XXX: debug
-  // return;
-
-  let key = request.key();
-  let context = request.context();
-  let content = context.original();
-
-  if translator::should_skip_translation(content) {
-    return;
-  }
-
-  // only log new translations requests once, and translated texts once
-  let response = translator::translate(request);
-  let visited = VISITED.get_or_init(|| RwLock::new(HashSet::new()));
-  let translated = TRANSLATED.get_or_init(|| RwLock::new(HashSet::new()));
-  if (response.is_none() && visited.read().unwrap().contains(key))
-    || (response.is_some() && translated.read().unwrap().contains(key))
-  {
-    return;
-  }
-
-  if response.is_none() {
-    // translating or untranslatable
-    visited.write().unwrap().insert(key.to_owned());
-  } else {
-    // translated
-    translated.write().unwrap().insert(key.to_owned());
-  }
-
-  let function = match context {
-    translation::TranslationContext::addst { .. } => "addst",
-    translation::TranslationContext::addst_flag { .. } => "addst_flag",
-    translation::TranslationContext::addcoloredst { .. } => "addcoloredst",
-    translation::TranslationContext::top_addst { .. } => "top_addst",
-    translation::TranslationContext::markup_text_box { .. } => "mtb_process_string_to_lines",
-    translation::TranslationContext::dfhack { .. } => "dfhack",
-  };
-  let mut lines = vec![format!("========== {key}"), format!("[{function}] {backtrace}")];
-
-  let viewscreen = request.view_screen();
-  lines.push(format!("viewscreen: {viewscreen}"));
-
-  let coordinate = request.coordinate();
-  lines.push(format!("coordinate: {coordinate:?}"));
-
-  let color_pair = request.color_pair();
-  if let Some(color_pair) = color_pair {
-    lines.push(format!("color_pair: {color_pair:?}"));
-  }
-
-  if let Some(flag) = context.flag() {
-    lines.push(format!("flag: {flag:#010b}"));
-  }
-
-  let is_markup = request.is_markup();
-  lines.push(format!(
-    "---- {} ----",
-    if is_markup { "MarkupText" } else { "PlainText" }
-  ));
-
-  lines.push(content.to_owned());
-  if let Some(response) = response {
-    lines.push("---- Translated ----".to_string());
-    lines.push(response.translated);
-  }
-
-  let debug_string = lines.join("\n");
-
-  // // XXX: debug
-  // if function != "addcoloredst" {
-  //   return;
-  // }
-
-  log::debug!("{debug_string}");
+fn log_text(_request: &translation::TranslationRequest, _backtrace: &str) {
+  return;
 }
 
 hook! {
