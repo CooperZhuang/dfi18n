@@ -1,0 +1,10 @@
+[package]
+name = "sdl2-sys"
+edition = "2024"
+
+[dependencies]
+anyhow = { workspace = true }
+log = { workspace = true }
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(raw_dylib)'] }

@@ -1,0 +1,23 @@
+# Common
+*~
+
+# Vim
+*.sw?
+
+# KDE
+.directory
+
+# OSX
+._*
+.DS_Store
+.DS_Store?
+.Spotlight-V100
+.Trashes
+
+# VSCode
+.vscode/
+
+# Project
+target
+mod/dfi18n/libs/*.dll
+mod/dfi18n/libs/*.so

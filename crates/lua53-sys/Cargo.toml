@@ -1,0 +1,9 @@
+[package]
+name = "lua53-sys"
+edition = "2024"
+
+[dependencies]
+cp437_string = { workspace = true }
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(raw_dylib)'] }

@@ -1,0 +1,6 @@
+[package]
+name = "cpp"
+edition = "2024"
+
+[build-dependencies]
+cc = { workspace = true }

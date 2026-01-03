@@ -1,0 +1,11 @@
+[package]
+name = "rule_based_translator"
+edition = "2024"
+
+[dependencies]
+anyhow = { workspace = true }
+indexmap = { workspace = true }
+log = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }

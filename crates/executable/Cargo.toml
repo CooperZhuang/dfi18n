@@ -1,0 +1,7 @@
+[package]
+name = "executable"
+edition = "2024"
+
+[dependencies]
+goblin = { workspace = true }
+indexmap = { workspace = true }

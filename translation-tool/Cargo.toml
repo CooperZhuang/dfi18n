@@ -1,0 +1,17 @@
+[package]
+name = "translation-tool"
+edition = "2024"
+
+[dependencies]
+rule_based_translator = { workspace = true }
+
+anyhow = { workspace = true }
+csv = { workspace = true }
+flexi_logger = { workspace = true }
+indexmap = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+
+clap = { version = "4.5.53", features = ["derive"] }
+color-print = "0.3.7"

@@ -1,0 +1,48 @@
+# DFI18n - Translation Mod for Dwarf Fortress
+
+DFI18n is a translation mod for Dwarf Fortress.
+
+**Please note:** This project is in early development. The current release is a **beta version** that may crash the game, corrupt save files, or cause loss of your game progress!
+
+This mod relies on data files provided by community translators to function.
+
+## Supported Versions
+
+This mod has been tested with [Dwarf Fortress 53.08 from Steam](https://store.steampowered.com/app/975370/Dwarf_Fortress/) (on both Windows and Linux). It may also work with the Itch or Classic versions, but this is not guaranteed.
+
+## Installation Steps
+
+1.  Back up your Dwarf Fortress save files.
+2.  Install [DFHack](https://store.steampowered.com/app/2346660/DFHack__Dwarf_Fortress_Modding_Engine/) from Steam.
+3.  Subscribe to the [DFI18n](https://steamcommunity.com/sharedfiles/filedetails/?id=3613958631) mod on the Steam Workshop.
+4.  Subscribe to mods providing translation data files on the Steam Workshop.
+    *   **Simplified Chinese:** [DFI18n Data - Simplified Chinese](https://steamcommunity.com/sharedfiles/filedetails/?id=3635900931)
+5.  If you previously installed the old Lite version of `dfint-rust-cjk`, remove `dfhooks_dfint_cjk.dll` and `libdfhooks_dfint_cjk.so` from your game directory.
+6.  Launch the game normally.
+
+**Troubleshooting:** If the translation mod fails to work, try enabling "Portable Mode" in the game settings (especially if your Steam library is not in the default location).
+
+## Known Issues
+
+*   The mod may impact game performance, resulting in lower FPS.
+*   On-screen text may flicker on some systems (raising the FPS limit may help until this is fixed).
+*   The DFHack overlay may sometimes render incorrectly.
+*   Tabs are not rendered with the correct width.
+*   Some texts remain untranslated (if not yet covered by community translations).
+*   Abbreviated text (e.g., `Cow` -> `Cw`) or text ending with ellipsis (`...`) will not translate correctly.
+*   Multi-line colored text is not handled properly.
+*   Most markup text is not yet supported (only Help text is currently supported).
+*   Hot-reloading translation data files may cause rendering issues.
+*   Windows backtrace frames may not show accurate memory addresses.
+
+## Acknowledgements
+
+*   This project draws heavy inspiration from [df-steam-hook-rs](https://github.com/dfint/df-steam-hook-rs).
+*   Memory search techniques are based on ideas from [dfint/search_offsets](https://github.com/dfint/search_offsets) by [insolor](https://github.com/insolor). Search patterns were generated using the IDA [FindFunc](https://github.com/FelixBer/FindFunc) plugin (thanks to [shevernitskiy](https://github.com/shevernitskiy) for suggesting this method).
+*   Thanks to [DFHack](https://github.com/DFHack) for providing the Lua API, structure definitions, and scripts to load types into Ghidra which helps reverse engineering.
+*   Translation data files provided by community translators:
+    *   **Simplified Chinese:** The [Dwarf Fortress Chinese Wiki](https://dfzh.huijiwiki.com/) translation team (special thanks to Bilibili user [WAN1694](https://space.bilibili.com/32828123/) for translation and testing assistance!).
+
+## License
+
+See [LICENSE](LICENSE) for details.
