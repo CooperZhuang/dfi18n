@@ -1,6 +1,6 @@
 use std::{path::Path, sync::OnceLock};
 
-use flexi_logger::{FileSpec, LevelFilter, LogSpecBuilder, Logger, LoggerHandle, WriteMode, json_format};
+use flexi_logger::{FileSpec, LevelFilter, LogSpecBuilder, Logger, LoggerHandle, WriteMode};
 
 use crate::{DATA_DIRECTORY, MOD_NAME};
 
@@ -23,7 +23,6 @@ pub fn get() -> &'static LoggerHandle {
         FileSpec::default().directory(Path::new(DATA_DIRECTORY).join("logs")).basename(MOD_NAME).suppress_timestamp(),
       )
       .write_mode(WriteMode::Async)
-      .format(json_format)
       .start()
       .unwrap();
 
