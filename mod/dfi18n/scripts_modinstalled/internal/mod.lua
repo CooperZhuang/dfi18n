@@ -109,10 +109,18 @@ end
 -- load simple dictionary data from a directory
 local function load_simple_dict_data(dir)
   p("is searching for simple translator data from \"%s\"...", dir)
+  -- TODO: remove legacy merged CSV support in future versions
   for _, file in ipairs(find_files(dir, 'csv')) do
     local lang_tag = file:match('([^/]+)%.csv$')
     p("is loading simple translator data for language tag \"%s\" from: \"%s\"...", lang_tag, file)
     native.load_simple_dict(lang_tag, file)
+  end
+  for _, lang_tag in ipairs(find_dirs(dir)) do
+    local lang_dir = dir .. '/' .. lang_tag
+    p("is loading simple translator data for language tag \"%s\" from: \"%s\"...", lang_tag, lang_dir)
+    for _, file in ipairs(find_files(lang_dir, 'csv')) do
+      native.load_simple_dict(lang_tag, file)
+    end
   end
 end
 
