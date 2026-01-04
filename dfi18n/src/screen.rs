@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicU16;
 use std::sync::{OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use crate::{df, text, types};
+use crate::{df, text, translation, types};
 
 // Screen layers
 #[derive(Debug, Clone)]
@@ -166,8 +166,18 @@ pub fn mark_occupied(layer: Layer, coord: types::Coordinate, text_block: &text::
       continue;
     }
 
-    for j in 0..text_block.columns() {
-      let column = column + j as i32;
+    let text_row = &text_block[i];
+    let cols_diff = text_block.columns() as f32 - text_row.columns() as f32;
+    let cols_offset = match text_block.alignment() {
+      translation::TextAlignment::Left => 0f32,
+      translation::TextAlignment::Center => cols_diff / 2.0,
+      translation::TextAlignment::Right => cols_diff,
+    };
+    let columns = text_row.columns() + if cols_offset == 0.0 { 0 } else { 1 };
+    let cols_offset = cols_offset.floor() as i32;
+
+    for j in 0..columns {
+      let column = column + cols_offset + j as i32;
       if column < 0 || column >= dims.width {
         continue;
       }
@@ -183,14 +193,14 @@ pub fn mark_occupied(layer: Layer, coord: types::Coordinate, text_block: &text::
 // Move all occupied marks on a screen layer
 pub fn move_occupied() {
   let mut occupied = get_occupied_mut();
-  let coord = df::gps::get_dimensions();
+  let dims = df::gps::get_dimensions();
   occupied.0.clear();
   occupied.1.clear();
-  let size = coord.width as usize * coord.height as usize;
+  let size = dims.width as usize * dims.height as usize;
   occupied.0.resize(size, (0, 0));
   occupied.1.resize(size, (0, 0));
-  for row in 0..coord.height {
-    for column in 0..coord.width {
+  for row in 0..dims.height {
+    for column in 0..dims.width {
       let coord = types::Coordinate { column, row };
 
       // offset boundary check

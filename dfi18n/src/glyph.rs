@@ -143,8 +143,14 @@ pub fn get_glyph_surface(ch: char) -> sdl::Surface<'static> {
 
         // rasterize the glyph, and calculate the surface size and the pixels buffer boundary
         let (metrics, bitmap) = font.rasterize(ch, font_size);
-        let buff_width = metrics.advance_width.ceil() as i32;
-        let buff_height = metrics.advance_height.ceil() as i32;
+        let mut buff_width = metrics.advance_width.ceil() as i32;
+        if (font_size - buff_width as f32).abs() / font_size < 0.1 {
+          buff_width = font_size.round() as i32;
+        }
+        let mut buff_height = metrics.advance_height.ceil() as i32;
+        if (font_size - buff_height as f32).abs() / font_size < 0.1 {
+          buff_height = font_size.round() as i32;
+        }
         let buff_size = (buff_width * buff_height) as isize;
 
         // create the surface and fill in the pixel data
@@ -152,7 +158,7 @@ pub fn get_glyph_surface(ch: char) -> sdl::Surface<'static> {
         surface.with_lock_mut(|buffer| {
           // adjustment made to y-offset to better align glyphs vertically
           // TODO: make this configurable
-          let y_offset = (font_size * font_scale / 16.0).round() as i32;
+          let y_offset = (font_size / 8.0).round() as i32;
 
           // horizontal offset of the left-most edge of the glyph bitmap (xmin is the left-most edge)
           let dx = metrics.xmin;

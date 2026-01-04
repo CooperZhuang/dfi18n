@@ -97,6 +97,12 @@ impl TextRow {
   pub fn orig_width(&self) -> i32 {
     self.fragments.iter().map(|f| f.orig_width()).sum()
   }
+
+  // Gets the number of columns the text row would occupy on the game screen
+  pub fn columns(&self) -> usize {
+    let orig_width = df::renderer::get_renderer_info().orig_size().width;
+    (self.orig_width() as f32 / orig_width as f32).ceil() as usize
+  }
 }
 
 // Layout information for a block of text
@@ -268,6 +274,11 @@ impl TextBlock {
   // Get the number of rows in the TextBlock
   pub fn columns(&self) -> usize {
     self.layout.columns
+  }
+
+  // Get the text alignment of the TextBlock
+  pub fn alignment(&self) -> &translation::TextAlignment {
+    &self.layout.alignment
   }
 
   // Adds the TextBlock to the specified screen layer at the given coordinate, returns its assigned ID
