@@ -9,7 +9,7 @@ use lua53_sys as lua;
 use sdl2_sys as sdl;
 
 use crate::types::{ColorPair, DFHackPen};
-use crate::{control, debugger, df, lang, logging, logo, markup, memory, screen, text, translation, translator, types};
+use crate::{control, df, lang, logging, logo, markup, memory, screen, text, translation, translator, types};
 use translation::{TranslationInput, TranslationRequest};
 
 fn addst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: u8, space: i32) {
@@ -268,10 +268,10 @@ fn update_all(renderer_ptr: *const ffi::c_void) {
     }
   }
 
-  if control::is_enabled() {
-    debugger::resize();
-    debugger::update();
-  }
+  // if control::is_enabled() {
+  //   debugger::resize();
+  //   debugger::update();
+  // }
 
   screen::clear_screens();
   control::toggle_enabled();
