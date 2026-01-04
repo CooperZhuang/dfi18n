@@ -11,6 +11,7 @@ mod glyph;
 mod hooks;
 mod lang;
 mod logger;
+mod logging;
 mod logo;
 mod markup;
 mod memory;

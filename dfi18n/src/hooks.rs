@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::sync::{Mutex, MutexGuard, OnceLock, RwLock};
 use std::{ffi, ptr};
 
@@ -10,7 +9,7 @@ use lua53_sys as lua;
 use sdl2_sys as sdl;
 
 use crate::types::{ColorPair, DFHackPen};
-use crate::{control, debugger, df, lang, logo, markup, memory, screen, text, translation, translator, types};
+use crate::{control, debugger, df, lang, logging, logo, markup, memory, screen, text, translation, translator, types};
 use translation::{TranslationInput, TranslationRequest};
 
 fn addst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: u8, space: i32) {
@@ -21,7 +20,7 @@ fn addst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: u8, 
     content: string.clone(),
   });
 
-  log_text(&request, &bt);
+  logging::log_text(&request, &bt, string_ptr);
   let text_block = text::TextBlock::get(&request);
   let columns = text_block.columns();
   let id = text_block.add_to_screen(screen::Layer::Lower, request.coordinate());
@@ -46,7 +45,7 @@ fn addst_flag(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just:
     flag: sflag,
   });
 
-  log_text(&request, &bt);
+  logging::log_text(&request, &bt, string_ptr);
   let text_block = text::TextBlock::get(&request);
   let columns = text_block.columns();
   let id = text_block.add_to_screen(screen::Layer::Lower, request.coordinate());
@@ -97,7 +96,7 @@ fn addcoloredst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, col
   let string = cp437_string::c_string_to_string(mtb_string.as_ptr() as *const ffi::c_char);
   let request = TranslationRequest::new(TranslationInput::addcoloredst { markup: string.clone() });
 
-  log_text(&request, &bt);
+  logging::log_text(&request, &bt, string_ptr);
 
   // always set width for the markup text box before rendering
   let mut markup = string.clone();
@@ -124,58 +123,18 @@ fn addcoloredst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, col
 }
 
 fn top_addst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: u8, space: i32) {
-  // TODO: add other markup text boxes as well
-  let help = df::game::main_interface::get_help_mut();
-  // for each markup text box
-  for mtb in help.text.iter_mut() {
-    let word = cpp::CppVector::from_raw(ptr::from_mut(&mut mtb.word));
-    for i in 0..word.size() {
-      let mtw_ptr: &mut df::game::MarkupTextWord = word.get(i);
-      let mtw = unsafe { (mtw_ptr as *const df::game::MarkupTextWord).as_ref_unchecked() };
-      let mtw_str_ptr = &mtw.str as *const _ as *const ffi::c_void;
-      // check if the string_ptr matches
-      if string_ptr == mtw_str_ptr {
-        // only render on the first markup text word
-        if i == 0 {
-          let address = mtb as *const df::game::MarkupTextBox as usize;
-          if let Some(mut markup) = markup::fetch_mtb_markup(address) {
-            let bt = crate::backtrace();
-
-            let request = TranslationRequest::new(TranslationInput::markup_text_box {
-              address,
-              markup: markup.clone(),
-            });
-
-            log_text(&request, &bt);
-
-            // always sync the markup text box before rendering
-            if control::is_enabled() {
-              if let Some(response) = translator::translate(&request) {
-                markup = response.translated;
-              }
-            }
-            markup::sync(&markup, address, control::is_enabled());
-            let text_block = markup::get(&markup).text_block();
-            let id = text_block.add_to_screen(screen::Layer::Upper, request.coordinate());
-            screen::mark_occupied(screen::Layer::Upper, request.coordinate(), &text_block, Some(id));
-          }
-        }
-
-        if control::is_enabled() {
-          return call_top_addst(gps_ptr, string_ptr, just, space);
-        }
-      }
-    }
-  }
-
   let bt = crate::backtrace();
+
+  if handle_help_mtb(string_ptr, &bt) {
+    return call_top_addst(gps_ptr, string_ptr, just, space);
+  }
 
   let string = cp437_string::cxx_string_to_string(string_ptr);
   let request = TranslationRequest::new(TranslationInput::top_addst {
     top_content: string.clone(),
   });
 
-  log_text(&request, &bt);
+  logging::log_text(&request, &bt, string_ptr);
   let text_block = text::TextBlock::get(&request);
   let columns = text_block.columns();
   let id = text_block.add_to_screen(screen::Layer::Upper, request.coordinate());
@@ -328,7 +287,7 @@ fn mtb_process_string_to_lines(mtb_ptr: *const ffi::c_void, markup_string_ptr: *
     markup: markup.clone(),
   });
 
-  log_text(&request, &bt);
+  logging::log_text(&request, &bt, ptr::null());
 
   markup::track_mtb_markup(mtb_ptr as usize, markup);
 
@@ -388,7 +347,7 @@ fn dfhack_addstr_flag(lua_state: *mut ffi::c_void) {
   });
 
   // Log the translation request and update the text block
-  log_text(&request, &bt);
+  logging::log_text(&request, &bt, ptr::null());
   let text_block = text::TextBlock::get(&request);
   let id = text_block.add_to_screen(screen::Layer::Lower, request.coordinate());
 
@@ -418,7 +377,7 @@ fn dfhack_paint_string(pen_str: *const ffi::c_void, x: i32, y: i32, string_ptr: 
     flag: 0,
   });
 
-  log_text(&request, &bt);
+  logging::log_text(&request, &bt, ptr::null());
   let text_block = text::TextBlock::get(&request);
   let columns = text_block.columns();
   let id = text_block.add_to_screen(screen::Layer::Lower, request.coordinate());
@@ -433,86 +392,6 @@ fn dfhack_paint_string(pen_str: *const ffi::c_void, x: i32, y: i32, string_ptr: 
   screen::mark_occupied(screen::Layer::Lower, coord, &text_block, Some(id));
 
   ret
-}
-
-static VISITED: OnceLock<RwLock<HashSet<String>>> = OnceLock::new();
-static TRANSLATED: OnceLock<RwLock<HashSet<String>>> = OnceLock::new();
-
-fn log_text(request: &translation::TranslationRequest, backtrace: &str) {
-  // // XXX: debug
-  // return;
-
-  let key = request.key();
-  let context = request.context();
-  let content = context.original();
-
-  if translator::should_skip_translation(content) {
-    return;
-  }
-
-  // only log new translations requests once, and translated texts once
-  let response = translator::translate(request);
-  let visited = VISITED.get_or_init(|| RwLock::new(HashSet::new()));
-  let translated = TRANSLATED.get_or_init(|| RwLock::new(HashSet::new()));
-  if (response.is_none() && visited.read().unwrap().contains(key))
-    || (response.is_some() && translated.read().unwrap().contains(key))
-  {
-    return;
-  }
-
-  if response.is_none() {
-    // translating or untranslatable
-    visited.write().unwrap().insert(key.to_owned());
-  } else {
-    // translated
-    translated.write().unwrap().insert(key.to_owned());
-  }
-
-  let function = match context {
-    translation::TranslationContext::addst { .. } => "addst",
-    translation::TranslationContext::addst_flag { .. } => "addst_flag",
-    translation::TranslationContext::addcoloredst { .. } => "addcoloredst",
-    translation::TranslationContext::top_addst { .. } => "top_addst",
-    translation::TranslationContext::markup_text_box { .. } => "mtb_process_string_to_lines",
-    translation::TranslationContext::dfhack { .. } => "dfhack",
-  };
-  let mut lines = vec![format!("========== {key}"), format!("[{function}] {backtrace}")];
-
-  let viewscreen = request.view_screen();
-  lines.push(format!("viewscreen: {viewscreen}"));
-
-  let coordinate = request.coordinate();
-  lines.push(format!("coordinate: {coordinate:?}"));
-
-  let color_pair = request.color_pair();
-  if let Some(color_pair) = color_pair {
-    lines.push(format!("color_pair: {color_pair:?}"));
-  }
-
-  if let Some(flag) = context.flag() {
-    lines.push(format!("flag: {flag:#010b}"));
-  }
-
-  let is_markup = request.is_markup();
-  lines.push(format!(
-    "---- {} ----",
-    if is_markup { "MarkupText" } else { "PlainText" }
-  ));
-
-  lines.push(content.to_owned());
-  if let Some(response) = response {
-    lines.push("---- Translated ----".to_string());
-    lines.push(response.translated);
-  }
-
-  let debug_string = lines.join("\n");
-
-  // // XXX: debug
-  // if function != "addcoloredst" {
-  //   return;
-  // }
-
-  log::debug!("{debug_string}");
 }
 
 hook! {
@@ -539,4 +418,57 @@ pub fn attach_all() -> Result<()> {
   attach_dfhack_paint_string(memory::get_raw_pointer_by_key("dfhack_paint_string")?)?;
 
   Ok(())
+}
+
+// handle translation for help markup text boxes, return true if handled
+fn handle_help_mtb(string_ptr: *const ffi::c_void, bt: &str) -> bool {
+  // TODO: add other markup text boxes as well
+  let help = df::game::main_interface::get_help_mut();
+  // for each markup text box
+  for mtb in help.text.iter_mut() {
+    let word = cpp::CppVector::from_raw(ptr::from_mut(&mut mtb.word));
+    for i in 0..word.size() {
+      let mtw_ptr: &mut df::game::MarkupTextWord = word.get(i);
+      let mtw = unsafe { (mtw_ptr as *const df::game::MarkupTextWord).as_ref_unchecked() };
+      let mtw_str_ptr = &mtw.str as *const _ as *const ffi::c_void;
+      // check if the string_ptr matches
+      if string_ptr == mtw_str_ptr {
+        // only render on the first markup text word
+        if i == 0 {
+          let address = mtb as *const df::game::MarkupTextBox as usize;
+          if let Some(mut markup) = markup::fetch_mtb_markup(address) {
+            let request = TranslationRequest::new(TranslationInput::markup_text_box {
+              address,
+              markup: markup.clone(),
+            });
+
+            logging::log_text(&request, bt, string_ptr);
+
+            // always sync the markup text box before rendering
+            if control::is_enabled() {
+              if let Some(response) = translator::translate(&request) {
+                markup = response.translated;
+              }
+            }
+            markup::sync(&markup, address, control::is_enabled());
+            let text_block = markup::get(&markup).text_block();
+
+            // no need to occupy the tiles if not enabled as the original function will do the rendering
+            if control::is_enabled() {
+              let id = text_block.add_to_screen(screen::Layer::Upper, request.coordinate());
+              screen::mark_occupied(screen::Layer::Upper, request.coordinate(), &text_block, Some(id));
+            }
+          }
+        }
+
+        // override original rendering
+        if control::is_enabled() {
+          return true;
+        }
+      }
+    }
+  }
+
+  // use original rendering
+  false
 }
