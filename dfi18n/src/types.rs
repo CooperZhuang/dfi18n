@@ -239,10 +239,6 @@ pub struct SDLInfo {
 }
 
 impl SDLInfo {
-  pub fn window(&self) -> sdl::Window<'static> {
-    sdl::Window::from_raw(self.window)
-  }
-
   pub fn renderer(&self) -> sdl::Renderer<'static> {
     sdl::Renderer::from_raw(self.renderer)
   }

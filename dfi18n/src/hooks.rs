@@ -268,11 +268,6 @@ fn update_all(renderer_ptr: *const ffi::c_void) {
     }
   }
 
-  // if control::is_enabled() {
-  //   debugger::resize();
-  //   debugger::update();
-  // }
-
   screen::clear_screens();
   control::toggle_enabled();
   control::do_reset_if_requested();

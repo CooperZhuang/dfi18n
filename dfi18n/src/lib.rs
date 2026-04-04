@@ -3,7 +3,6 @@
 mod backtrace;
 mod cjk;
 mod control;
-mod debugger;
 mod df;
 mod game;
 mod glyph;
