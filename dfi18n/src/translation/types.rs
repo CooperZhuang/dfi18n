@@ -90,7 +90,7 @@ impl TranslationInput {
     let hash_input = format!("{original:?}/{viewscreen:?}/{color_pair:?}/{flag:?}");
 
     let sha256 = Sha256::digest(hash_input.as_bytes());
-    let key = format!("{function}:{original:?}:{sha256:064x}");
+    let key = format!("{function}:{original:?}:{:064x}", base16ct::HexDisplay(&sha256));
     key
   }
 }

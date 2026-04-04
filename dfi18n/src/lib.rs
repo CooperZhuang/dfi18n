@@ -1,5 +1,4 @@
 #![feature(macro_metavar_expr_concat)]
-#![feature(ptr_as_ref_unchecked)]
 
 mod backtrace;
 mod cjk;

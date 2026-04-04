@@ -1,0 +1,15 @@
+[tools]
+rust = "nightly"
+
+[tasks]
+build-windows = "cross build --release --target x86_64-pc-windows-msvc && cp target/x86_64-pc-windows-msvc/release/dfi18n.dll mod/dfi18n/libs/"
+build-linux = "cargo build --release && cp target/release/libdfi18n.so mod/dfi18n/libs/"
+build = [
+  { task = "build-windows" },
+  { task = "build-linux" },
+]
+clean = "cargo clean"
+cleanbuild = [
+  { task = "clean" },
+  { task = "build" },
+]

@@ -20,6 +20,7 @@ macros = { workspace = true }
 
 anyhow = { workspace = true }
 backtrace = { workspace = true }
+base16ct = { workspace = true }
 csv = { workspace = true }
 flexi_logger = { workspace = true }
 fontdue = { workspace = true }
