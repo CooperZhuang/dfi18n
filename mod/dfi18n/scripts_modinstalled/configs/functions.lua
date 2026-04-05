@@ -32,5 +32,6 @@ LINUX_MEMORY_SEARCH = {
   { "get_key_display", "libg_src_lib.so", "symbol", "_ZN15enabler_inputst13GetKeyDisplayB5cxx11Ei" },
   { "mtb_process_string_to_lines", "dwarfort", "pattern", "f3 0f 1e ?? ?? 57 ?? 56 ?? 55 ?? 54 55 ?? 89 ?? 53 ?? 81 ?? 68 0d 00 00 ?? 8b ?? 08 64 ?? 8b ?? ?? 28 00 00 00 ?? 89 ?? ?? 58 0d 00 00 31 ?? ?? 85 ?? 0f 84 08 05 00 00" },
   { "mtb_set_width", "dwarfort", "pattern", "f3 0f 1e fa 39 77 ?? 0f 84 ?? ?? ?? ?? 41 55 49 89 fa 41 54 55 53 48 8b 47 ?? 89 f3 4c 8b 1f c7 47 ?? ?? ?? ?? ?? 89 77 ?? 49 39 c3 72" },
+  { "render_things", "libg_src_lib.so", "symbol", "_Z13render_thingsv" },
   { "dfhack_paint_string", "libdfhack.so", "symbol", "_ZN6DFHack6Screen11paintStringERKNS0_3PenEiiRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEb" },
 }
