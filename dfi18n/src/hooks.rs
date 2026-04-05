@@ -152,11 +152,6 @@ fn top_addst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: 
 fn update_tile(renderer_ptr: *const ffi::c_void, x: i32, y: i32) {
   // render the MOD logo on the main menu screen
   if x == 0 && y == 0 {
-    // move occupied tiles before rendering
-    if control::is_enabled() {
-      screen::move_occupied();
-    }
-
     // display the title logo if available
     if let Some(display_title) = get_display_title_mut().as_ref() {
       let origin_offset = df::renderer::get_renderer_info().origin_offset();
@@ -238,17 +233,9 @@ fn update_all(renderer_ptr: *const ffi::c_void) {
       if let Some(logo_texture) = logo::get_title_logo_by_lang_tag(&lang::current_lang_tag()) {
         get_display_title_mut().replace(logo_texture);
         *display_title = false;
-      } else {
-        get_display_title_mut().take();
       }
-    } else {
-      get_display_title_mut().take();
     }
-  } else {
-    // ensure to clear the display title when disabled
-    get_display_title_mut().take();
   }
-
   let mut dimensions = LAST_DIMENSIONS.get_or_init(|| RwLock::new(types::Dimensions::default())).write().unwrap();
 
   let last_dimensions = dimensions.clone();
@@ -268,7 +255,6 @@ fn update_all(renderer_ptr: *const ffi::c_void) {
     }
   }
 
-  screen::clear_screens();
   control::toggle_enabled();
   control::do_reset_if_requested();
 }
@@ -360,6 +346,18 @@ fn dfhack_addstr_flag(lua_state: *mut ffi::c_void) {
   screen::mark_occupied(screen::Layer::Lower, bottom_coord, &text_block, Some(id));
 }
 
+fn render_things() {
+  screen::clear_screens();
+  get_display_title_mut().take();
+
+  call_render_things();
+
+  // move occupied tiles before rendering
+  if control::is_enabled() {
+    screen::move_occupied();
+  }
+}
+
 fn dfhack_paint_string(pen_str: *const ffi::c_void, x: i32, y: i32, string_ptr: *const ffi::c_void, map: bool) -> bool {
   let bt = crate::backtrace();
 
@@ -398,6 +396,7 @@ hook! {
   fn update_all(renderer_ptr: *const ffi::c_void);
   fn mtb_process_string_to_lines(mtb_ptr: *const ffi::c_void, markup_string_ptr: *const ffi::c_void);
   fn mtb_set_width(mtb_ptr: *const ffi::c_void, width: i32);
+  fn render_things();
   fn dfhack_paint_string(pen_str: *const ffi::c_void, x: i32, y: i32, string_ptr: *const ffi::c_void, map: bool) -> bool;
 }
 
@@ -410,6 +409,7 @@ pub fn attach_all() -> Result<()> {
   attach_update_all(memory::get_raw_pointer_by_key("update_all")?)?;
   attach_mtb_process_string_to_lines(memory::get_raw_pointer_by_key("mtb_process_string_to_lines")?)?;
   attach_mtb_set_width(memory::get_raw_pointer_by_key("mtb_set_width")?)?;
+  attach_render_things(memory::get_raw_pointer_by_key("render_things")?)?;
   attach_dfhack_paint_string(memory::get_raw_pointer_by_key("dfhack_paint_string")?)?;
 
   Ok(())
