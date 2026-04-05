@@ -25,7 +25,6 @@ This mod has been tested with [Dwarf Fortress 53.08 from Steam](https://store.st
 ## Known Issues
 
 *   The mod may impact game performance, resulting in lower FPS.
-*   On-screen text may flicker on some systems (raising the FPS limit may help until this is fixed).
 *   The DFHack overlay may sometimes render incorrectly.
 *   Tabs are not rendered with the correct width.
 *   Some texts remain untranslated (if not yet covered by community translations).
