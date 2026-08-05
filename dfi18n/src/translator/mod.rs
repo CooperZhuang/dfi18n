@@ -65,10 +65,20 @@ pub fn translate(request: &translation::TranslationRequest) -> Option<translatio
   if let Some(cached) = cache.get(key) {
     // return cached response
     return cached.clone();
-  } else {
-    // insert a placeholder to indicate this request is being processed
-    cache.insert(key.to_owned(), None);
   }
+
+  // Try the in-memory dictionary synchronously before going async. This is a
+  // plain HashMap lookup (no API, no stutter) and makes strings that are
+  // already in the dictionary translate on their FIRST render instead of
+  // showing English until the async task resolves (the block often gets
+  // cleared from the screen before that ever happens).
+  if let Some(response) = do_translate(request) {
+    cache.insert(key.to_owned(), Some(response.clone()));
+    return Some(response);
+  }
+
+  // insert a placeholder to indicate this request is being processed
+  cache.insert(key.to_owned(), None);
 
   // spawn a task to perform the translation
   tasks::spawn(translate_task(request.clone()));

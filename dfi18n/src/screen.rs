@@ -85,65 +85,49 @@ pub fn get_text_blocks(layer: Layer) -> Vec<(u16, types::Coordinate, text::TextB
 }
 
 // Re-translate every already-rendered text block in place (both layers), using
-// the current dictionary. Called after the realtime translator updates the
-// dictionary so on-screen English text re-renders as Chinese without waiting for
-// the game to re-issue addst.
+// the current dictionary. Called periodically by the realtime translator so
+// on-screen English text re-renders as Chinese without waiting for the game to
+// re-issue addst.
 //
-// Safety: the screen lock is never held during translation lookups or markup
-// parsing (avoids both stutter and a MARKUPS<->SCREENS lock-order deadlock with
-// the game thread), and blocks are applied by matching (coordinate, original)
-// rather than by a cached index (the list can change between snapshot and apply).
+// The whole pass runs under ONE screen write lock: all work performed while
+// holding it (in-memory dict lookups + markup parsing) is sub-millisecond, and
+// atomicity guarantees the game thread cannot clear/re-add blocks between the
+// snapshot and the apply (which previously dropped most updates).
 pub fn retranslate_all() {
-  // snapshot (layer, coord, original, color_pair) under a read lock
-  let snapshot: Vec<(usize, types::Coordinate, String, types::ColorPair)> = {
-    let screens = get_screens();
-    let mut v = Vec::new();
-    for (li, screen) in [&screens.0, &screens.1].iter().enumerate() {
-      for entry in screen.iter() {
-        if !entry.2.original_str().is_empty() {
+  let mut screens = get_screens_mut();
+  let mut total = 0usize;
+  let mut applied = 0usize;
+  for li in 0..2 {
+    let screen = if li == 0 { &mut screens.0 } else { &mut screens.1 };
+    for entry in screen.iter_mut() {
+      let original = entry.2.original_str();
+      if original.is_empty() {
+        continue;
+      }
+      let request = if original.contains("[C:") {
+        translation::TranslationRequest::new(translation::TranslationInput::addcoloredst {
+          markup: original.to_owned(),
+        })
+      } else {
+        translation::TranslationRequest::new(translation::TranslationInput::addst {
+          content: original.to_owned(),
+        })
+      };
+      if let Some(response) = translator::do_translate(&request) {
+        total += 1;
+        if original.contains("[C:") {
+          // rebuild via markup parsing so color codes render correctly
+          let m = markup::get(&response.translated);
+          entry.2 = m.text_block();
+        } else {
           let color_pair = entry.2.default_color_pair();
-          v.push((li, entry.1, entry.2.original_str().to_owned(), color_pair));
+          entry.2 = text::TextBlock::from_translation(original, color_pair, &response.translated);
         }
-      }
-    }
-    v
-  };
-
-  // translate + build new blocks WITHOUT any screen lock
-  let mut updates: Vec<(usize, types::Coordinate, String, text::TextBlock)> = Vec::new();
-  for (li, coord, original, color_pair) in snapshot {
-    if original.contains("[C:") {
-      let request = translation::TranslationRequest::new(translation::TranslationInput::addcoloredst {
-        markup: original.clone(),
-      });
-      if let Some(response) = translator::do_translate(&request) {
-        let m = markup::get(&response.translated);
-        updates.push((li, coord, original, m.text_block()));
-      }
-    } else {
-      let request = translation::TranslationRequest::new(translation::TranslationInput::addst {
-        content: original.clone(),
-      });
-      if let Some(response) = translator::do_translate(&request) {
-        let block = text::TextBlock::from_translation(&original, color_pair, &response.translated);
-        updates.push((li, coord, original, block));
+        applied += 1;
       }
     }
   }
-
-  // apply under a short write lock, matching by (coord, original)
-  if !updates.is_empty() {
-    let mut screens = get_screens_mut();
-    for (li, coord, original, new_block) in updates {
-      let screen = if li == 0 { &mut screens.0 } else { &mut screens.1 };
-      for entry in screen.iter_mut() {
-        if entry.1 == coord && entry.2.original_str() == original {
-          entry.2 = new_block.clone();
-          break;
-        }
-      }
-    }
-  }
+  log::debug!("retranslate_all: applied {} of {} blocks", applied, total);
 }
 
 // Checks if any DFHack occupied tile exists within the specified rectangle
