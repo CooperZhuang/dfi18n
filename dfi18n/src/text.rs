@@ -165,6 +165,18 @@ impl DerefMut for TextBlock {
 }
 
 impl TextBlock {
+  // The original (untranslated) text this block was built from, if any
+  pub fn original_str(&self) -> &str {
+    &self.original
+  }
+
+  // Record the original text this block was built from (for in-place retranslation)
+  pub fn set_original(&mut self, original: &str) {
+    self.original = original.to_owned();
+  }
+}
+
+impl TextBlock {
   // Create a TextBlock with specified number of columns and default layout
   pub fn from_columns(columns: usize) -> Self {
     TextBlock {
@@ -193,6 +205,23 @@ impl TextBlock {
     }
   }
 
+  // Rebuild this block's rows/layout from an already-obtained translation.
+  // The translation lookup must happen outside any screen lock; this only
+  // applies the result (brief lock).
+  pub fn apply_translation(&mut self, translated: &str) {    let color_pair = self.rows.first().map(|r| r.default_color_pair).unwrap_or_default();
+    let mut row = TextRow::new(color_pair);
+    row.push_text(translated.to_owned());
+    let mut layout = TextLayout::new(row.columns());
+    if self.layout.double_line_height {
+      layout.set_double_line_height();
+    }
+    if !matches!(self.layout.alignment, translation::TextAlignment::Left) {
+      layout.set_alignment(self.layout.alignment.clone());
+    }
+    self.rows = vec![row];
+    self.layout = layout;
+  }
+
   // Re-translate this block in place from its stored original. Used when the
   // dictionary is updated at runtime (realtime translation): an already-rendered
   // English block gets rebuilt with the newly available translation.
@@ -200,24 +229,13 @@ impl TextBlock {
     if self.original.is_empty() {
       return;
     }
-    let color_pair = self.rows.first().map(|r| r.default_color_pair).unwrap_or_default();
     let request = translation::TranslationRequest::new(translation::TranslationInput::addst {
       content: self.original.clone(),
     });
     // use do_translate (direct dictionary lookup) so the freshly inserted
     // realtime translations are picked up regardless of the cache
     if let Some(response) = translator::do_translate(&request) {
-      let mut row = TextRow::new(color_pair);
-      row.push_text(response.translated);
-      let mut layout = TextLayout::new(row.columns());
-      if self.layout.double_line_height {
-        layout.set_double_line_height();
-      }
-      if !matches!(self.layout.alignment, translation::TextAlignment::Left) {
-        layout.set_alignment(self.layout.alignment.clone());
-      }
-      self.rows = vec![row];
-      self.layout = layout;
+      self.apply_translation(&response.translated);
     }
   }
 

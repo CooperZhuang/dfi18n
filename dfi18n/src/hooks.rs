@@ -108,7 +108,9 @@ fn addcoloredst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, col
   let mut markup = markup::get(&markup);
   markup.set_width(string_bytes.len() as i32);
 
-  let text_block = markup.text_block();
+  let mut text_block = markup.text_block();
+  // record the original markup so the block can be re-translated in place
+  text_block.set_original(&string);
   let columns = text_block.columns();
   let id = text_block.add_to_screen(screen::Layer::Lower, request.coordinate());
 
