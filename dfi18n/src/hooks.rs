@@ -387,6 +387,58 @@ fn dfhack_paint_string(pen_str: *const ffi::c_void, x: i32, y: i32, string_ptr: 
   ret
 }
 
+// Hook the game's personality-value description composer (Dwarf Fortress.exe
+// 0x1406631f0). It writes a composed description string into the std::string*
+// at `out` (r8). That text is rendered by the game's newer text path, which
+// dfi18n's classic addst hooks never see -- so it was never translated nor
+// logged. We hook the composer to capture untranslated composed strings into
+// the log (read-only; we do not modify `out` so game logic is untouched).
+fn description_composer(index: i32, variant: i32, out: *mut ffi::c_void) {
+  // let the original build the composed string first
+  call_description_composer(index, variant, out);
+
+  // read the composed string
+  let content = cp437_string::cxx_string_to_string(out as *const ffi::c_void);
+  if translator::should_skip_translation(&content) {
+    return;
+  }
+
+  let request = TranslationRequest::new(TranslationInput::addst { content });
+
+  // log it if it is not covered by the dictionaries/rulesets
+  logging::log_text(&request, "", ptr::null());
+}
+
+// Hook the game's thought composer (Dwarf Fortress.exe 0x140e25e80). It writes
+// a composed thought string into the std::string* at arg2 (rdx). Thoughts are
+// generated for every dwarf constantly, so this collects hundreds of actual
+// composed strings per session -- much faster than waiting for screens.
+#[allow(clippy::too_many_arguments)]
+fn thought_composer(
+  a1: usize,
+  out: *mut ffi::c_void,
+  a3: i32,
+  a4: i32,
+  a5: i32,
+  a6: u32,
+  a7: u32,
+  a8: u32,
+) {
+  // let the original build the composed thought string first
+  call_thought_composer(a1, out, a3, a4, a5, a6, a7, a8);
+
+  // read the composed string
+  let content = cp437_string::cxx_string_to_string(out as *const ffi::c_void);
+  if translator::should_skip_translation(&content) {
+    return;
+  }
+
+  let request = TranslationRequest::new(TranslationInput::addst { content });
+
+  // log it if it is not covered by the dictionaries/rulesets
+  logging::log_text(&request, "", ptr::null());
+}
+
 hook! {
   fn addst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: u8, space: i32);
   fn addst_flag(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: u8, space: i32, sflag: u32);
@@ -398,6 +450,8 @@ hook! {
   fn mtb_set_width(mtb_ptr: *const ffi::c_void, width: i32);
   fn render_things();
   fn dfhack_paint_string(pen_str: *const ffi::c_void, x: i32, y: i32, string_ptr: *const ffi::c_void, map: bool) -> bool;
+  fn description_composer(index: i32, variant: i32, out: *mut ffi::c_void);
+  fn thought_composer(a1: usize, out: *mut ffi::c_void, a3: i32, a4: i32, a5: i32, a6: u32, a7: u32, a8: u32);
 }
 
 pub fn attach_all() -> Result<()> {
@@ -411,6 +465,16 @@ pub fn attach_all() -> Result<()> {
   attach_mtb_set_width(memory::get_raw_pointer_by_key("mtb_set_width")?)?;
   attach_render_things(memory::get_raw_pointer_by_key("render_things")?)?;
   attach_dfhack_paint_string(memory::get_raw_pointer_by_key("dfhack_paint_string")?)?;
+
+  // Optional hooks: the new-render-path composers only exist in newer DF
+  // builds. Skip them gracefully when the pattern does not match, so older
+  // DF versions keep working without an attach error.
+  if let Ok(ptr) = memory::get_raw_pointer_by_key("description_composer") {
+    attach_description_composer(ptr)?;
+  }
+  if let Ok(ptr) = memory::get_raw_pointer_by_key("thought_composer") {
+    attach_thought_composer(ptr)?;
+  }
 
   Ok(())
 }

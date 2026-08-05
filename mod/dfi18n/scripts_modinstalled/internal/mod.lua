@@ -152,7 +152,7 @@ function setup()
 
   -- add memory regions
   for i, mem in ipairs(dfhack.internal.getMemRanges()) do
-    if mem.read and mem.execute and (string.match(mem.name, '%bDwarf Fortress%.exe$') or string.match(mem.name, '%bdfhooks_dfhack%.dll$') or string.match(mem.name, '%bdwarfort$') or string.match(mem.name, '%blibg_src_lib%.so$') or string.match(mem.name, '%blibdfhack%.so$')) then
+    if mem.read and mem.execute and (string.match(mem.name, '%bDwarf Fortress%.exe$') or string.match(mem.name, '%bdfhooks_dfhack%.dll$') or string.match(mem.name, '%bdfhack%.dll$') or string.match(mem.name, '%bdwarfort$') or string.match(mem.name, '%blibg_src_lib%.so$') or string.match(mem.name, '%blibdfhack%.so$')) then
       native.add_memory_region(mem.name, mem.base_addr or 0, mem.start_addr, mem.end_addr)
     end
   end
