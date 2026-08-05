@@ -75,13 +75,15 @@ extern "C" fn init(lua_state: *mut std::ffi::c_void) {
   }
 }
 
-// Reload only the translation dictionaries: clears the simple/rulesets
-// translators and the translation cache, preserving text blocks, markup and
-// fonts so the screen does not flicker. Called from Lua's auto-reload watcher.
+// Reload the translation dictionaries and clear the text-block cache so
+// already-rendered text re-renders with the newly translated entries (e.g. the
+// realtime translator fills the dictionary while the game runs). Clears only
+// dictionaries + translation cache + text blocks; fonts and markup are kept.
 #[unsafe(no_mangle)]
 extern "C" fn reload_dict() {
   translator::reset();
-  log::info!("Dictionaries reset for reload");
+  text::reset();
+  log::info!("Dictionaries and text blocks reset for reload");
 }
 
 // XXX: debug function for testing
