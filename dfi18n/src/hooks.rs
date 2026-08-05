@@ -390,11 +390,10 @@ fn dfhack_paint_string(pen_str: *const ffi::c_void, x: i32, y: i32, string_ptr: 
 // Hook the game's personality-value description composer (Dwarf Fortress.exe
 // 0x1406631f0). It writes a composed description string into the std::string*
 // at `out` (r8). That text is rendered by the game's newer text path, which
-// dfi18n's classic addst hooks never see. We capture untranslated strings into
-// the log and, when a translation is available, rewrite `out` with it so the
-// new render path shows Chinese directly. The rewrite uses the ASYNC translate
-// path (cache hit = cheap; miss = spawn task, skip this call), so the game
-// thread never blocks on translation.
+// dfi18n's classic addst hooks never see. Read-only: capture untranslated
+// strings (into the log and the realtime translate queue); we do NOT rewrite
+// `out` because the game's renderer does not reliably display the injected
+// CJK (encoding/width issues).
 fn description_composer(index: i32, variant: i32, out: *mut ffi::c_void) {
   // let the original build the composed string first
   call_description_composer(index, variant, out);
@@ -409,15 +408,6 @@ fn description_composer(index: i32, variant: i32, out: *mut ffi::c_void) {
 
   // log it if it is not covered by the dictionaries/rulesets
   logging::log_text(&request, "", ptr::null());
-
-  // ASYNC rewrite: non-blocking translate, then write the translation back
-  if control::is_enabled() {
-    if let Some(response) = translator::translate(&request) {
-      if response.translated != content {
-        cpp::string_assign(out, response.translated.as_bytes());
-      }
-    }
-  }
 }
 
 // Hook the game's thought composer (Dwarf Fortress.exe 0x140e25e80). It writes
@@ -448,15 +438,6 @@ fn thought_composer(
 
   // log it if it is not covered by the dictionaries/rulesets
   logging::log_text(&request, "", ptr::null());
-
-  // ASYNC rewrite: non-blocking translate, then write the translation back
-  if control::is_enabled() {
-    if let Some(response) = translator::translate(&request) {
-      if response.translated != content {
-        cpp::string_assign(out, response.translated.as_bytes());
-      }
-    }
-  }
 }
 
 hook! {
