@@ -8,6 +8,20 @@ use crate::{game, lang, tasks, translation};
 mod rulesets;
 mod simple;
 
+// Check if a string is covered by the simple dictionary (used by the realtime
+// translator to decide whether a captured string still needs translating).
+pub fn is_translated(original: &str) -> bool {
+  let lang_tag = lang::current_lang_tag();
+  simple::contains(&lang_tag, original)
+}
+
+// Insert/replace a translation into the simple dictionary (used by the
+// realtime translator to apply translations immediately, before persistence).
+pub fn insert_translation(original: &str, translated: &str) {
+  let lang_tag = lang::current_lang_tag();
+  simple::insert_translation(&lang_tag, original, translated);
+}
+
 // Reset the translators and translation caches
 pub fn reset() {
   rulesets::reset();

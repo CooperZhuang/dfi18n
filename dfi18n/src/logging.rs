@@ -32,6 +32,9 @@ pub fn log_text(request: &translation::TranslationRequest, backtrace: &str, ptr:
     translator::translate_task(request.clone()).await;
     let response = translator::translate(&request);
     if response.is_none() {
+      // queue for background realtime translation (optional framework feature)
+      crate::realtime_translate::push(content.clone());
+
       let function = match &context {
         translation::TranslationContext::addst { .. } => "addst",
         translation::TranslationContext::addst_flag { .. } => "addst_flag",

@@ -56,6 +56,19 @@ pub fn translate(
   })
 }
 
+// Check whether a string is present in the simple dictionary for a lang tag
+pub fn contains(lang_tag: &str, text: &str) -> bool {
+  let dicts = get_dicts();
+  dicts.get(lang_tag).map(|d| d.contains_key(text)).unwrap_or(false)
+}
+
+// Insert or replace a translation into the simple dictionary for a lang tag
+pub fn insert_translation(lang_tag: &str, text: &str, translation: &str) {
+  let mut dicts = get_dicts_mut();
+  let dict = dicts.entry(lang_tag.to_string()).or_insert_with(SimpleDictionary::new);
+  dict.insert(text.to_string(), (translation.to_string(), HashMap::new()));
+}
+
 // Load a simple dictionary from a CSV file into the global storage
 #[unsafe(no_mangle)]
 extern "C" fn load_simple_dict(lua_state: *mut std::ffi::c_void) {
