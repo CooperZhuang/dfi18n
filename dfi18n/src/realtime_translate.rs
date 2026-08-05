@@ -271,9 +271,9 @@ async fn run_loop() {
       for (s, t) in &entries {
         translator::insert_translation(s, t);
       }
-      // clear text blocks so already-rendered text re-renders with the new
-      // translations (English -> Chinese transition on screen)
+      // re-translate already-rendered text blocks in place (English -> Chinese)
       crate::text::reset();
+      crate::screen::retranslate_all();
       // persist
       if let Some(dir) = find_data_dir() {
         append_to_csv(&dir, &entries);

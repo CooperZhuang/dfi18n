@@ -143,6 +143,9 @@ pub struct TextBlock {
   rows: Vec<TextRow>,
   // The layout information for the text block
   layout: TextLayout,
+  // The original (untranslated) text this block was built from, if any.
+  // Kept so the block can be re-translated in place when the dictionary updates.
+  original: String,
 }
 
 impl Deref for TextBlock {
@@ -175,6 +178,7 @@ impl TextBlock {
     TextBlock {
       rows: vec![row],
       layout,
+      original: String::new(),
     }
   }
 
@@ -183,7 +187,38 @@ impl TextBlock {
     let mut row = TextRow::new(color_pair);
     row.push_text(original.to_owned());
     let layout = TextLayout::new(original.len());
-    Self::from_row(row, layout)
+    Self {
+      original: original.to_owned(),
+      ..Self::from_row(row, layout)
+    }
+  }
+
+  // Re-translate this block in place from its stored original. Used when the
+  // dictionary is updated at runtime (realtime translation): an already-rendered
+  // English block gets rebuilt with the newly available translation.
+  pub fn retranslate(&mut self) {
+    if self.original.is_empty() {
+      return;
+    }
+    let color_pair = self.rows.first().map(|r| r.default_color_pair).unwrap_or_default();
+    let request = translation::TranslationRequest::new(translation::TranslationInput::addst {
+      content: self.original.clone(),
+    });
+    // use do_translate (direct dictionary lookup) so the freshly inserted
+    // realtime translations are picked up regardless of the cache
+    if let Some(response) = translator::do_translate(&request) {
+      let mut row = TextRow::new(color_pair);
+      row.push_text(response.translated);
+      let mut layout = TextLayout::new(row.columns());
+      if self.layout.double_line_height {
+        layout.set_double_line_height();
+      }
+      if !matches!(self.layout.alignment, translation::TextAlignment::Left) {
+        layout.set_alignment(self.layout.alignment.clone());
+      }
+      self.rows = vec![row];
+      self.layout = layout;
+    }
   }
 
   // Get a TextBlock from a TranslationRequest, using cache if available
@@ -264,7 +299,10 @@ impl TextBlock {
         layout
       };
 
-      return Self::from_row(row, layout);
+      return Self {
+        original: original.to_owned(),
+        ..Self::from_row(row, layout)
+      };
     }
 
     // fallback to original text

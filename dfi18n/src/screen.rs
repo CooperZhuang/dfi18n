@@ -84,6 +84,20 @@ pub fn get_text_blocks(layer: Layer) -> Vec<(u16, types::Coordinate, text::TextB
   screen.iter().map(|(id, coord, tb)| (*id, coord.to_owned(), tb.to_owned())).collect()
 }
 
+// Re-translate every already-rendered text block in place (both layers), using
+// the current dictionary. Called after the realtime translator updates the
+// dictionary so on-screen English text re-renders as Chinese without waiting for
+// the game to re-issue addst.
+pub fn retranslate_all() {
+  let mut screens = get_screens_mut();
+  for e in screens.0.iter_mut() {
+    e.2.retranslate();
+  }
+  for e in screens.1.iter_mut() {
+    e.2.retranslate();
+  }
+}
+
 // Checks if any DFHack occupied tile exists within the specified rectangle
 pub fn is_occupied_tile(x1: i32, x2: i32, y1: i32, y2: i32, layer: &Layer, id: u16) -> bool {
   let occupied = get_occupied_mut();
