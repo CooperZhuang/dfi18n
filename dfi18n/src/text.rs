@@ -183,6 +183,14 @@ impl TextBlock {
     self.rows.first().map(|r| r.default_color_pair).unwrap_or_default()
   }
 
+  // Whether the rendered text already contains CJK characters (i.e. it has been
+  // translated). Used by the re-translate sweep to skip already-Chinese blocks.
+  pub fn is_chinese(&self) -> bool {
+    self.rows.iter().flat_map(|r| r.fragments.iter()).any(|f| {
+      f.content.chars().any(|c| matches!(c, '\u{4e00}'..='\u{9fff}' | '\u{3000}'..='\u{303f}' | '\u{ff00}'..='\u{ffef}'))
+    })
+  }
+
   // Record the original text this block was built from (for in-place retranslation)
   pub fn set_original(&mut self, original: &str) {
     self.original = original.to_owned();
