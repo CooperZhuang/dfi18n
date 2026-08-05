@@ -257,6 +257,11 @@ async fn run_loop() {
       *q = keep;
     }
     if batch.is_empty() {
+      // No new strings this tick, but already-rendered blocks may have been
+      // captured in English on their first frame (the async translate cache is
+      // populated only after the request resolves) and never re-drawn by the
+      // game. Re-translate them now that the dictionary/cache has the answer.
+      crate::screen::retranslate_all();
       continue;
     }
 
@@ -279,6 +284,11 @@ async fn run_loop() {
         append_to_csv(&dir, &entries);
       }
       log::info!("realtime_translate: translated {} new strings", entries.len());
+    } else {
+      // Even when the API returned nothing, still sweep already-rendered blocks
+      // whose translations are now in the dictionary (e.g. from the static
+      // backlog loaded at startup).
+      crate::screen::retranslate_all();
     }
   }
 }
