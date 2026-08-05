@@ -389,10 +389,12 @@ fn dfhack_paint_string(pen_str: *const ffi::c_void, x: i32, y: i32, string_ptr: 
   ret
 }
 
-// Hook the game's personality-value description composer (Dwarf Fortress.exe
-// 0x1406631f0). It writes a composed description string into the std::string*
-// at `out` (r8). That text is rendered by the game's newer text path, which
-// dfi18n's classic addst hooks never see. Read-only: capture untranslated
+// Hook the game's personality-value description composer (observed at
+// 0x140664be0 on DF 53.16; located by runtime byte-pattern search, so the
+// address is version-adaptive). It writes a composed description string into
+// the std::string* at `out` (r8). That text is rendered by the game's newer
+// text path, which dfi18n's classic addst hooks never see. Read-only: capture
+// untranslated
 // strings (into the log and the realtime translate queue); we do NOT rewrite
 // `out` because the game's renderer does not reliably display the injected
 // CJK (encoding/width issues).
@@ -413,10 +415,12 @@ fn description_composer(index: i32, variant: i32, out: *mut ffi::c_void) {
   logging::log_text(&request, &bt, ptr::null());
 }
 
-// Hook the game's thought composer (Dwarf Fortress.exe 0x140e25e80). It writes
-// a composed thought string into the std::string* at arg2 (rdx). Thoughts are
-// generated for every dwarf constantly, so this collects hundreds of actual
-// composed strings per session -- much faster than waiting for screens.
+// Hook the game's thought composer (observed at 0x140e2c460 on DF 53.16;
+// located by runtime byte-pattern search, so the address is version-adaptive).
+// It writes a composed thought string into the std::string* at arg2 (rdx).
+// Thoughts are generated for every dwarf constantly, so this collects hundreds
+// of actual composed strings per session -- much faster than waiting for
+// screens.
 #[allow(clippy::too_many_arguments)]
 fn thought_composer(
   a1: usize,
