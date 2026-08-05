@@ -406,8 +406,9 @@ fn description_composer(index: i32, variant: i32, out: *mut ffi::c_void) {
 
   let request = TranslationRequest::new(TranslationInput::addst { content: content.clone() });
 
-  // log it if it is not covered by the dictionaries/rulesets
-  logging::log_text(&request, "", ptr::null());
+  // log it (with the runtime call stack) if it is not covered by the dictionaries
+  let bt = crate::backtrace();
+  logging::log_text(&request, &bt, ptr::null());
 }
 
 // Hook the game's thought composer (Dwarf Fortress.exe 0x140e25e80). It writes
@@ -436,8 +437,9 @@ fn thought_composer(
 
   let request = TranslationRequest::new(TranslationInput::addst { content: content.clone() });
 
-  // log it if it is not covered by the dictionaries/rulesets
-  logging::log_text(&request, "", ptr::null());
+  // log it (with the runtime call stack) if it is not covered by the dictionaries
+  let bt = crate::backtrace();
+  logging::log_text(&request, &bt, ptr::null());
 }
 
 hook! {
