@@ -276,6 +276,9 @@ async fn run_loop() {
       for (s, t) in &entries {
         translator::insert_translation(s, t);
       }
+      // drop the translation cache so previously-missed keys are re-evaluated
+      // against the updated dictionary on their next render
+      translator::clear_cache();
       // re-translate already-rendered text blocks in place (English -> Chinese)
       crate::text::reset();
       crate::screen::retranslate_all();

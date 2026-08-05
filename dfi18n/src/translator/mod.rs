@@ -63,8 +63,18 @@ pub fn translate(request: &translation::TranslationRequest) -> Option<translatio
   let cache = caches.entry(lang_tag.clone()).or_insert_with(TranslationCache::new);
   let key = request.key();
   if let Some(cached) = cache.get(key) {
-    // return cached response
-    return cached.clone();
+    if cached.is_some() {
+      // return cached response
+      return cached.clone();
+    }
+    // Cached miss: the in-memory dictionary may have been updated since (the
+    // realtime translator inserts new entries while the game runs). Re-check
+    // it synchronously so a one-time miss does not stick forever.
+    if let Some(response) = do_translate(request) {
+      cache.insert(key.to_owned(), Some(response.clone()));
+      return Some(response);
+    }
+    return None;
   }
 
   // Try the in-memory dictionary synchronously before going async. This is a
@@ -85,6 +95,13 @@ pub fn translate(request: &translation::TranslationRequest) -> Option<translatio
 
   // return no translation for now
   None
+}
+
+// Clear only the translation caches (not the dictionaries). Called after the
+// realtime translator inserts new entries so previously-missed keys are
+// re-evaluated on the next request.
+pub fn clear_cache() {
+  get_caches_mut().clear();
 }
 
 // The translation task that performs the actual translation
