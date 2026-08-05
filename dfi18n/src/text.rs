@@ -165,9 +165,22 @@ impl DerefMut for TextBlock {
 }
 
 impl TextBlock {
+  // Build a translated block from an original + color pair + translation.
+  // Used by screen::retranslate_all (outside any screen lock).
+  pub fn from_translation(original: &str, color_pair: types::ColorPair, translated: &str) -> Self {
+    let mut b = Self::from_original(original, color_pair);
+    b.apply_translation(translated);
+    b
+  }
+
   // The original (untranslated) text this block was built from, if any
   pub fn original_str(&self) -> &str {
     &self.original
+  }
+
+  // The default color pair of the first row (used to re-render translated text)
+  pub fn default_color_pair(&self) -> types::ColorPair {
+    self.rows.first().map(|r| r.default_color_pair).unwrap_or_default()
   }
 
   // Record the original text this block was built from (for in-place retranslation)

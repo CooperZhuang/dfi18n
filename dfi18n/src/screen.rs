@@ -89,54 +89,58 @@ pub fn get_text_blocks(layer: Layer) -> Vec<(u16, types::Coordinate, text::TextB
 // dictionary so on-screen English text re-renders as Chinese without waiting for
 // the game to re-issue addst.
 //
-// To avoid stuttering the game thread, the screen lock is held only briefly:
-// the originals are snapshotted under a read lock, the translation lookups run
-// WITHOUT any lock, and the results are applied under a short write lock.
+// Safety: the screen lock is never held during translation lookups or markup
+// parsing (avoids both stutter and a MARKUPS<->SCREENS lock-order deadlock with
+// the game thread), and blocks are applied by matching (coordinate, original)
+// rather than by a cached index (the list can change between snapshot and apply).
 pub fn retranslate_all() {
-  let snapshot: Vec<(usize, usize, String)> = {
+  // snapshot (layer, coord, original, color_pair) under a read lock
+  let snapshot: Vec<(usize, types::Coordinate, String, types::ColorPair)> = {
     let screens = get_screens();
     let mut v = Vec::new();
     for (li, screen) in [&screens.0, &screens.1].iter().enumerate() {
-      for (i, entry) in screen.iter().enumerate() {
+      for entry in screen.iter() {
         if !entry.2.original_str().is_empty() {
-          v.push((li, i, entry.2.original_str().to_owned()));
+          let color_pair = entry.2.default_color_pair();
+          v.push((li, entry.1, entry.2.original_str().to_owned(), color_pair));
         }
       }
     }
     v
   };
 
-  // look up translations without holding any screen lock
-  let mut updates: Vec<(usize, usize, String, bool)> = Vec::new(); // (layer, idx, translated, is_markup)
-  for (li, i, original) in snapshot {
+  // translate + build new blocks WITHOUT any screen lock
+  let mut updates: Vec<(usize, types::Coordinate, String, text::TextBlock)> = Vec::new();
+  for (li, coord, original, color_pair) in snapshot {
     if original.contains("[C:") {
       let request = translation::TranslationRequest::new(translation::TranslationInput::addcoloredst {
-        markup: original,
+        markup: original.clone(),
       });
       if let Some(response) = translator::do_translate(&request) {
-        updates.push((li, i, response.translated, true));
+        let m = markup::get(&response.translated);
+        updates.push((li, coord, original, m.text_block()));
       }
     } else {
       let request = translation::TranslationRequest::new(translation::TranslationInput::addst {
-        content: original,
+        content: original.clone(),
       });
       if let Some(response) = translator::do_translate(&request) {
-        updates.push((li, i, response.translated, false));
+        let block = text::TextBlock::from_translation(&original, color_pair, &response.translated);
+        updates.push((li, coord, original, block));
       }
     }
   }
 
-  // apply under a short write lock
+  // apply under a short write lock, matching by (coord, original)
   if !updates.is_empty() {
     let mut screens = get_screens_mut();
-    for (li, i, translated, is_markup) in updates {
-      let block = if li == 0 { &mut screens.0[i].2 } else { &mut screens.1[i].2 };
-      if is_markup {
-        // rebuild via markup parsing so color codes render correctly
-        let m = markup::get(&translated);
-        *block = m.text_block();
-      } else {
-        block.apply_translation(&translated);
+    for (li, coord, original, new_block) in updates {
+      let screen = if li == 0 { &mut screens.0 } else { &mut screens.1 };
+      for entry in screen.iter_mut() {
+        if entry.1 == coord && entry.2.original_str() == original {
+          entry.2 = new_block.clone();
+          break;
+        }
       }
     }
   }
