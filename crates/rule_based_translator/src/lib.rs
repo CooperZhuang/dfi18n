@@ -9,13 +9,26 @@ mod replacer;
 pub use replacer::*;
 
 // A rule-based translator
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Translator {
   // All rulesets loaded
   rulesets: RuleSets,
+  // Per-translation rule-iteration budget
+  budget: usize,
+}
+
+impl Default for Translator {
+  fn default() -> Self {
+    Translator { rulesets: RuleSets::new(), budget: RULE_MATCH_BUDGET }
+  }
 }
 
 impl Translator {
+  // Set the per-translation matching budget (rule iterations before giving up)
+  pub fn set_budget(&mut self, budget: usize) {
+    self.budget = budget;
+  }
+
   // Load rulesets from a directory
   pub fn load_from_dir(&mut self, path: impl AsRef<path::Path>) -> Result<()> {
     let base = path.as_ref().to_path_buf();
@@ -32,9 +45,14 @@ impl Translator {
     results.into_iter().min_by_key(|result| result.weight()).map(|result| result.translated)
   }
 
+  // Debug: names of all loaded rulesets and their rule counts
+  pub fn ruleset_summary(&self) -> Vec<(String, usize)> {
+    self.rulesets.iter().map(|(k, rs)| (k.clone(), rs.len())).collect()
+  }
+
   // Get all translation results for the given text, for debugging purposes
   pub fn get_all_translations(&self, text: &str, partial_match: bool) -> Vec<ResultTree> {
-    let mut context = Context::default();
+    let mut context = Context { budget: self.budget, ..Context::default() };
     let results = self.do_translate(&mut context, text, "::", 0);
     if partial_match {
       return results;
@@ -529,11 +547,13 @@ pub struct RuleNode {
 }
 
 // Maximum number of rule iterations a single translation may attempt before
-// giving up. The ruleset matcher is a recursive backtracking search over all
-// rules of the referenced rulesets; for text that matches nothing it can
-// explore the whole tree, which previously took hundreds of milliseconds per
-// string. A budget caps the worst case at a few milliseconds.
-const RULE_MATCH_BUDGET: usize = 10_000;
+// giving up. The ruleset matcher is a recursive backtracking search over the
+// referenced rulesets (root references ~20 sub-rulesets). Too small a budget
+// silently disables coverage for deep matches (names, skills, body parts), so
+// this must be large enough to resolve those. The matcher runs on the async
+// translate task, not the render thread, so a generous budget does not stutter
+// the game; it only bounds worst-case background CPU.
+const RULE_MATCH_BUDGET: usize = 1_000_000;
 
 pub struct Context {
   pub identifier_path: Vec<String>,
