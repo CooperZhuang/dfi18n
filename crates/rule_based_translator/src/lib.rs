@@ -553,7 +553,7 @@ pub struct RuleNode {
 // this must be large enough to resolve those. The matcher runs on the async
 // translate task, not the render thread, so a generous budget does not stutter
 // the game; it only bounds worst-case background CPU.
-const RULE_MATCH_BUDGET: usize = 1_000_000;
+const RULE_MATCH_BUDGET: usize = 100_000_000;
 
 pub struct Context {
   pub identifier_path: Vec<String>,

@@ -52,7 +52,21 @@ pub fn should_skip_translation(original: &str) -> bool {
 
   original.len() < 2
     || original.starts_with("FPS: ")
+    // pure numbers / dimensions / selection sizes ("1251", "10x10x1", "3 x 5")
+    // are rendered as-is: no translation needed, and skipping them avoids
+    // burning the ruleset matcher budget + realtime queue on every drag frame
+    || is_numeric_size(original)
     || original.chars().all(|c| c.is_ascii_digit() || c.is_ascii_punctuation() || c.is_ascii_whitespace())
+}
+
+// Whether a string is a numeric size/dimension like "10x10x1" or "3 x 5"
+// (digits separated by x/X/×/*). Requires at least one separator so plain
+// numbers fall through to the all-digit check above.
+fn is_numeric_size(s: &str) -> bool {
+  let compact: String = s.chars().filter(|c| !c.is_ascii_whitespace()).collect();
+  let parts: Vec<&str> = compact.split(['x', 'X', '×', '*']).collect();
+  parts.len() >= 2
+    && parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
 }
 
 // Translate the given TranslationRequest
