@@ -257,11 +257,9 @@ async fn run_loop() {
       *q = keep;
     }
     if batch.is_empty() {
-      // No new strings this tick, but already-rendered blocks may have been
-      // captured in English on their first frame (the async translate cache is
-      // populated only after the request resolves) and never re-drawn by the
-      // game. Re-translate them now that the dictionary/cache has the answer.
-      crate::screen::retranslate_all();
+      // No API work: synchronous dictionary lookup handles subsequent renders.
+      // Do not sweep the whole screen every tick; that competes with the game
+      // renderer and was the source of periodic stutter.
       continue;
     }
 
@@ -288,10 +286,9 @@ async fn run_loop() {
       }
       log::info!("realtime_translate: translated {} new strings", entries.len());
     } else {
-      // Even when the API returned nothing, still sweep already-rendered blocks
-      // whose translations are now in the dictionary (e.g. from the static
-      // backlog loaded at startup).
-      crate::screen::retranslate_all();
+      // No entries changed; avoid a full-screen sweep. The next render will
+      // use the current dictionary and cache state.
+      continue;
     }
   }
 }
