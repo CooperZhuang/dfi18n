@@ -13,14 +13,14 @@ use crate::{control, df, lang, logging, logo, markup, memory, screen, text, tran
 use translation::{TranslationInput, TranslationRequest};
 
 fn addst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: u8, space: i32) {
-  let bt = crate::backtrace();
+  
 
   let string = cp437_string::cxx_string_to_string(string_ptr);
   let request = TranslationRequest::new(TranslationInput::addst {
     content: string.clone(),
   });
 
-  logging::log_text(&request, &bt, string_ptr);
+  logging::log_text(&request, string_ptr);
   let text_block = text::TextBlock::get(&request);
   let columns = text_block.columns();
   let id = text_block.add_to_screen(screen::Layer::Lower, request.coordinate());
@@ -36,7 +36,7 @@ fn addst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: u8, 
 }
 
 fn addst_flag(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: u8, space: i32, sflag: u32) {
-  let bt = crate::backtrace();
+  
 
   let string = cp437_string::cxx_string_to_string(string_ptr);
 
@@ -45,7 +45,7 @@ fn addst_flag(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just:
     flag: sflag,
   });
 
-  logging::log_text(&request, &bt, string_ptr);
+  logging::log_text(&request, string_ptr);
   let text_block = text::TextBlock::get(&request);
   let columns = text_block.columns();
   let id = text_block.add_to_screen(screen::Layer::Lower, request.coordinate());
@@ -73,7 +73,7 @@ fn addst_flag(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just:
 }
 
 fn addcoloredst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, color_string_ptr: *const ffi::c_void) {
-  let bt = crate::backtrace();
+  
 
   // zip color string and reconstruct mtb string for translation
   let mut prev_color = None;
@@ -96,7 +96,7 @@ fn addcoloredst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, col
   let string = cp437_string::c_string_to_string(mtb_string.as_ptr() as *const ffi::c_char);
   let request = TranslationRequest::new(TranslationInput::addcoloredst { markup: string.clone() });
 
-  logging::log_text(&request, &bt, string_ptr);
+  logging::log_text(&request, string_ptr);
 
   // always set width for the markup text box before rendering
   let mut markup = string.clone();
@@ -136,7 +136,7 @@ fn top_addst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: 
     top_content: string.clone(),
   });
 
-  logging::log_text(&request, &bt, string_ptr);
+  logging::log_text(&request, string_ptr);
   let text_block = text::TextBlock::get(&request);
   let columns = text_block.columns();
   let id = text_block.add_to_screen(screen::Layer::Upper, request.coordinate());
@@ -262,7 +262,7 @@ fn update_all(renderer_ptr: *const ffi::c_void) {
 }
 
 fn mtb_process_string_to_lines(mtb_ptr: *const ffi::c_void, markup_string_ptr: *const ffi::c_void) {
-  let bt = crate::backtrace();
+  
 
   let markup = cp437_string::cxx_string_to_string(markup_string_ptr);
   let request = TranslationRequest::new(TranslationInput::markup_text_box {
@@ -270,7 +270,7 @@ fn mtb_process_string_to_lines(mtb_ptr: *const ffi::c_void, markup_string_ptr: *
     markup: markup.clone(),
   });
 
-  logging::log_text(&request, &bt, ptr::null());
+  logging::log_text(&request, ptr::null());
 
   markup::track_mtb_markup(mtb_ptr as usize, markup);
 
@@ -302,7 +302,7 @@ fn mtb_set_width(mtb_ptr: *const ffi::c_void, width: i32) {
 
 #[unsafe(no_mangle)]
 fn dfhack_addstr_flag(lua_state: *mut ffi::c_void) {
-  let bt = crate::backtrace();
+  
 
   // Read parameters from Lua stack
   let x = lua::check_integer(lua_state, 1);
@@ -330,7 +330,7 @@ fn dfhack_addstr_flag(lua_state: *mut ffi::c_void) {
   });
 
   // Log the translation request and update the text block
-  logging::log_text(&request, &bt, ptr::null());
+  logging::log_text(&request, ptr::null());
   let text_block = text::TextBlock::get(&request);
   let id = text_block.add_to_screen(screen::Layer::Lower, request.coordinate());
 
@@ -361,7 +361,7 @@ fn render_things() {
 }
 
 fn dfhack_paint_string(pen_str: *const ffi::c_void, x: i32, y: i32, string_ptr: *const ffi::c_void, map: bool) -> bool {
-  let bt = crate::backtrace();
+  
 
   let string = cp437_string::cxx_string_to_string(string_ptr);
   let coordinate = types::Coordinate { row: y, column: x };
@@ -372,7 +372,7 @@ fn dfhack_paint_string(pen_str: *const ffi::c_void, x: i32, y: i32, string_ptr: 
     flag: 0,
   });
 
-  logging::log_text(&request, &bt, ptr::null());
+  logging::log_text(&request, ptr::null());
   let text_block = text::TextBlock::get(&request);
   let columns = text_block.columns();
   let id = text_block.add_to_screen(screen::Layer::Lower, request.coordinate());
@@ -411,8 +411,8 @@ fn description_composer(index: i32, variant: i32, out: *mut ffi::c_void) {
   let request = TranslationRequest::new(TranslationInput::addst { content: content.clone() });
 
   // log it (with the runtime call stack) if it is not covered by the dictionaries
-  let bt = crate::backtrace();
-  logging::log_text(&request, &bt, ptr::null());
+  
+  logging::log_text(&request, ptr::null());
 }
 
 // Hook the game's thought composer (observed at 0x140e2c460 on DF 53.16;
@@ -444,8 +444,8 @@ fn thought_composer(
   let request = TranslationRequest::new(TranslationInput::addst { content: content.clone() });
 
   // log it (with the runtime call stack) if it is not covered by the dictionaries
-  let bt = crate::backtrace();
-  logging::log_text(&request, &bt, ptr::null());
+  
+  logging::log_text(&request, ptr::null());
 }
 
 hook! {
@@ -510,7 +510,7 @@ fn handle_help_mtb(string_ptr: *const ffi::c_void, bt: &str) -> bool {
               markup: markup.clone(),
             });
 
-            logging::log_text(&request, bt, string_ptr);
+            logging::log_text(&request, string_ptr);
 
             // always sync the markup text box before rendering
             if control::is_enabled() {

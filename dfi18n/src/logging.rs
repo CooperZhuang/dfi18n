@@ -18,7 +18,7 @@ fn context_kind(context: &translation::TranslationContext) -> &'static str {
   }
 }
 
-pub fn log_text(request: &translation::TranslationRequest, backtrace: &str, ptr: *const std::ffi::c_void) {
+pub fn log_text(request: &translation::TranslationRequest, ptr: *const std::ffi::c_void) {
   let context = request.context().clone();
   let content = context.original();
   if translator::should_skip_translation(content) {
@@ -26,24 +26,23 @@ pub fn log_text(request: &translation::TranslationRequest, backtrace: &str, ptr:
   }
 
   let function = context_kind(&context);
-  // request.key() includes rendering context that can change between frames.
-  // Diagnostics and realtime queueing care about the translatable content, so
-  // deduplicate by rendering type + original text. One write lock avoids the
-  // previous read-then-write race and prevents per-frame task/log churn.
   let visit_key = format!("{function}\0{content}");
   let visited = VISITED.get_or_init(|| RwLock::new(HashSet::new()));
   if !visited.write().insert(visit_key) {
     return;
   }
 
+  // Backtrace is expensive (a full stack walk + per-frame offset lookup), so
+  // compute it lazily here, only for content that is genuinely new and will be
+  // written to the log. Already-seen text returns above without paying for it.
+  let backtrace = crate::backtrace();
+
   let request = request.clone();
   let key = request.key().to_owned();
   let content = content.to_owned();
-  let backtrace = backtrace.to_owned();
   let ptr = ptr as usize;
   tasks::spawn(async move {
     let started = std::time::Instant::now();
-    // Ensure existing dictionaries/rulesets are checked and the cache is filled.
     translator::translate_task(request.clone()).await;
     let response = translator::translate(&request);
     let elapsed_ms = started.elapsed().as_millis();
