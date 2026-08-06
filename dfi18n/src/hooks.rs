@@ -101,7 +101,7 @@ fn addcoloredst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, col
   // always set width for the markup text box before rendering
   let mut markup = string.clone();
   if control::is_enabled() {
-    if let Some(response) = translator::simple_translate(&request) {
+    if let Some(response) = translator::translate(&request) {
       markup = response.translated;
     }
   }
@@ -514,7 +514,7 @@ fn handle_help_mtb(string_ptr: *const ffi::c_void, bt: &str) -> bool {
 
             // always sync the markup text box before rendering
             if control::is_enabled() {
-              if let Some(response) = translator::simple_translate(&request) {
+              if let Some(response) = translator::translate(&request) {
                 markup = response.translated;
               }
             }

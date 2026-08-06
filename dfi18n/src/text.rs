@@ -266,7 +266,7 @@ impl TextBlock {
 
     if request.is_markup() {
       // attempt translation to get translated markup and fallback to original markup
-      let markup = if let Some(response) = translator::simple_translate(&request) {
+      let markup = if let Some(response) = translator::translate(&request) {
         response.translated
       } else {
         request.original().to_owned()
@@ -277,7 +277,7 @@ impl TextBlock {
     } else {
       // early return for untranslatable content or translation is not available (do not cache content that is not translated)
       let original = request.original();
-      if translator::should_skip_translation(original) || translator::simple_translate(request).is_none() {
+      if translator::should_skip_translation(original) || translator::translate(request).is_none() {
         let mut untranslated_text_block = Self::from_original(original, color_pair);
 
         // set double line height when needed
@@ -318,7 +318,7 @@ impl TextBlock {
     }
 
     // if the translation is available
-    if let Some(response) = translator::simple_translate(request) {
+    if let Some(response) = translator::translate(request) {
       // prepare the translated TextRow
       let mut row = TextRow::new(color_pair);
       row.push_text(response.translated);

@@ -68,12 +68,28 @@ pub fn translate(request: &translation::TranslationRequest) -> Option<translatio
     return cached.clone();
   }
 
-  // Try the in-memory dictionary synchronously before going async. This is a
-  // plain HashMap lookup (no API, no stutter) and makes strings that are
-  // already in the dictionary translate on their FIRST render instead of
-  // showing English until the async task resolves (the block often gets
-  // cleared from the screen before that ever happens).
-  if let Some(response) = do_translate(request) {
+  // Synchronous path consults ONLY the simple in-memory dictionary (a plain
+  // HashMap lookup, no API, no stutter). The ruleset matcher is intentionally
+  // NOT run here: it can take hundreds of milliseconds for text that matches
+  // nothing, which would stall the render thread. Ruleset-covered strings are
+  // resolved by the async translate_task, which fills the cache a frame later
+  // (so they become Chinese on the next render without blocking).
+  if request.original() == game::version() {
+    let translated = format!(
+      "{} + {}-{} v{}",
+      game::version(),
+      crate::MOD_NAME,
+      game::os_platform(),
+      game::mod_version()
+    );
+    let response = translation::TranslationResponse {
+      translated,
+      alignment: translation::TextAlignment::default(),
+    };
+    cache.insert(key.to_owned(), Some(response.clone()));
+    return Some(response);
+  }
+  if let Some(response) = simple::translate(&lang_tag, request.context()) {
     cache.insert(key.to_owned(), Some(response.clone()));
     return Some(response);
   }
@@ -81,7 +97,7 @@ pub fn translate(request: &translation::TranslationRequest) -> Option<translatio
   // insert a placeholder to indicate this request is being processed
   cache.insert(key.to_owned(), None);
 
-  // spawn a task to perform the translation
+  // spawn a task to perform the full translation (rulesets + realtime queue)
   tasks::spawn(translate_task(request.clone()));
 
   // return no translation for now
@@ -93,28 +109,6 @@ pub fn translate(request: &translation::TranslationRequest) -> Option<translatio
 // re-evaluated on the next request.
 pub fn clear_cache() {
   get_caches_mut().clear();
-}
-
-// Fast main-thread-safe lookup used by the render hooks: consults ONLY the
-// simple in-memory dictionary (no ruleset matcher, no cache write lock, no
-// async spawn). Strings covered by the rulesets still become Chinese one frame
-// later when the async translate task fills the cache.
-pub fn simple_translate(request: &translation::TranslationRequest) -> Option<translation::TranslationResponse> {
-  if request.original() == game::version() {
-    let translated = format!(
-      "{} + {}-{} v{}",
-      game::version(),
-      crate::MOD_NAME,
-      game::os_platform(),
-      game::mod_version()
-    );
-    return Some(translation::TranslationResponse {
-      translated,
-      alignment: translation::TextAlignment::default(),
-    });
-  }
-  let lang_tag = lang::current_lang_tag();
-  simple::translate(&lang_tag, request.context())
 }
 
 // The translation task that performs the actual translation
