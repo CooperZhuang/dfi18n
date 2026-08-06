@@ -125,9 +125,7 @@ fn addcoloredst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, col
 }
 
 fn top_addst(gps_ptr: *const ffi::c_void, string_ptr: *const ffi::c_void, just: u8, space: i32) {
-  let bt = crate::backtrace();
-
-  if handle_help_mtb(string_ptr, &bt) {
+  if handle_help_mtb(string_ptr) {
     return call_top_addst(gps_ptr, string_ptr, just, space);
   }
 
@@ -489,7 +487,7 @@ pub fn attach_all() -> Result<()> {
 }
 
 // handle translation for help markup text boxes, return true if handled
-fn handle_help_mtb(string_ptr: *const ffi::c_void, bt: &str) -> bool {
+fn handle_help_mtb(string_ptr: *const ffi::c_void) -> bool {
   // TODO: add other markup text boxes as well
   let help = df::game::main_interface::get_help_mut();
   // for each markup text box

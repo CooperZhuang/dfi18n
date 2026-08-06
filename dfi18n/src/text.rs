@@ -165,32 +165,6 @@ impl DerefMut for TextBlock {
 }
 
 impl TextBlock {
-  // Build a translated block from an original + color pair + translation.
-  // Used by screen::retranslate_all (outside any screen lock).
-  pub fn from_translation(original: &str, color_pair: types::ColorPair, translated: &str) -> Self {
-    let mut b = Self::from_original(original, color_pair);
-    b.apply_translation(translated);
-    b
-  }
-
-  // The original (untranslated) text this block was built from, if any
-  pub fn original_str(&self) -> &str {
-    &self.original
-  }
-
-  // The default color pair of the first row (used to re-render translated text)
-  pub fn default_color_pair(&self) -> types::ColorPair {
-    self.rows.first().map(|r| r.default_color_pair).unwrap_or_default()
-  }
-
-  // Whether the rendered text already contains CJK characters (i.e. it has been
-  // translated). Used by the re-translate sweep to skip already-Chinese blocks.
-  pub fn is_chinese(&self) -> bool {
-    self.rows.iter().flat_map(|r| r.fragments.iter()).any(|f| {
-      f.content.chars().any(|c| matches!(c, '\u{4e00}'..='\u{9fff}' | '\u{3000}'..='\u{303f}' | '\u{ff00}'..='\u{ffef}'))
-    })
-  }
-
   // Record the original text this block was built from (for in-place retranslation)
   pub fn set_original(&mut self, original: &str) {
     self.original = original.to_owned();
@@ -223,40 +197,6 @@ impl TextBlock {
     Self {
       original: original.to_owned(),
       ..Self::from_row(row, layout)
-    }
-  }
-
-  // Rebuild this block's rows/layout from an already-obtained translation.
-  // The translation lookup must happen outside any screen lock; this only
-  // applies the result (brief lock).
-  pub fn apply_translation(&mut self, translated: &str) {    let color_pair = self.rows.first().map(|r| r.default_color_pair).unwrap_or_default();
-    let mut row = TextRow::new(color_pair);
-    row.push_text(translated.to_owned());
-    let mut layout = TextLayout::new(row.columns());
-    if self.layout.double_line_height {
-      layout.set_double_line_height();
-    }
-    if !matches!(self.layout.alignment, translation::TextAlignment::Left) {
-      layout.set_alignment(self.layout.alignment.clone());
-    }
-    self.rows = vec![row];
-    self.layout = layout;
-  }
-
-  // Re-translate this block in place from its stored original. Used when the
-  // dictionary is updated at runtime (realtime translation): an already-rendered
-  // English block gets rebuilt with the newly available translation.
-  pub fn retranslate(&mut self) {
-    if self.original.is_empty() {
-      return;
-    }
-    let request = translation::TranslationRequest::new(translation::TranslationInput::addst {
-      content: self.original.clone(),
-    });
-    // use do_translate (direct dictionary lookup) so the freshly inserted
-    // realtime translations are picked up regardless of the cache
-    if let Some(response) = translator::do_translate(&request) {
-      self.apply_translation(&response.translated);
     }
   }
 

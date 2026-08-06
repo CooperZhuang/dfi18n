@@ -1,7 +1,7 @@
 use std::sync::atomic::AtomicU16;
 use std::sync::{OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use crate::{df, markup, text, translation, translator, types};
+use crate::{df, text, translation, types};
 
 // Screen layers
 #[derive(Debug, Clone)]
@@ -82,86 +82,6 @@ pub fn get_text_blocks(layer: Layer) -> Vec<(u16, types::Coordinate, text::TextB
     Layer::Upper => &screens.1,
   };
   screen.iter().map(|(id, coord, tb)| (*id, coord.to_owned(), tb.to_owned())).collect()
-}
-
-// Re-translate every already-rendered text block in place (both layers), using
-// the current dictionary. Called periodically by the realtime translator so
-// on-screen English text re-renders as Chinese without waiting for the game to
-// re-issue addst.
-//
-// This is a safety net on top of the synchronous first-frame lookup in
-// translator::translate (which already renders in-dictionary strings as Chinese
-// on first draw), so it must not cause stutter:
-//   - The screen lock is never held during translation lookups or markup
-//     parsing (all potentially slow work happens outside any lock).
-//   - Blocks that already contain CJK are skipped (nothing to do).
-//   - Updates are applied under a short write lock, matched by original string.
-pub fn retranslate_all() {
-  let started = std::time::Instant::now();
-  // snapshot (layer, coord, original, color_pair) under a read lock (cheap)
-  let snapshot: Vec<(usize, types::Coordinate, String, types::ColorPair)> = {
-    let screens = get_screens();
-    let mut v = Vec::new();
-    for (li, screen) in [&screens.0, &screens.1].iter().enumerate() {
-      for entry in screen.iter() {
-        let original = entry.2.original_str();
-        if !original.is_empty() && !entry.2.is_chinese() {
-          v.push((li, entry.1, original.to_owned(), entry.2.default_color_pair()));
-        }
-      }
-    }
-    v
-  };
-  let snapshot_count = snapshot.len();
-
-  // translate + build new blocks WITHOUT any screen lock (the slow part)
-  let mut updates: Vec<(usize, String, text::TextBlock)> = Vec::new(); // (layer, original, block)
-  for (li, _coord, original, color_pair) in snapshot {
-    let request = if original.contains("[C:") {
-      translation::TranslationRequest::new(translation::TranslationInput::addcoloredst {
-        markup: original.clone(),
-      })
-    } else {
-      translation::TranslationRequest::new(translation::TranslationInput::addst {
-        content: original.clone(),
-      })
-    };
-    if let Some(response) = translator::do_translate(&request) {
-      let block = if original.contains("[C:") {
-        let m = markup::get(&response.translated);
-        m.text_block()
-      } else {
-        text::TextBlock::from_translation(&original, color_pair, &response.translated)
-      };
-      updates.push((li, original, block));
-    }
-  }
-  let update_count = updates.len();
-  let build_ms = started.elapsed().as_millis();
-
-  // apply under a short write lock, matched by original string
-  let mut applied = 0usize;
-  if !updates.is_empty() {
-    let mut screens = get_screens_mut();
-    for (li, original, new_block) in updates {
-      let screen = if li == 0 { &mut screens.0 } else { &mut screens.1 };
-      for entry in screen.iter_mut() {
-        if entry.2.original_str() == original {
-          entry.2 = new_block.clone();
-          applied += 1;
-          break;
-        }
-      }
-    }
-  }
-  log::debug!(
-    "retranslate_trace snapshot={} updates={} applied={} build_ms={} total_ms={}",
-    snapshot_count,
-    update_count,
-    applied,
-    build_ms,
-    started.elapsed().as_millis()
-  );
 }
 
 // Checks if any DFHack occupied tile exists within the specified rectangle
