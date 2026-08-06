@@ -63,18 +63,9 @@ pub fn translate(request: &translation::TranslationRequest) -> Option<translatio
   let cache = caches.entry(lang_tag.clone()).or_insert_with(TranslationCache::new);
   let key = request.key();
   if let Some(cached) = cache.get(key) {
-    if cached.is_some() {
-      // return cached response
-      return cached.clone();
-    }
-    // Cached miss: the in-memory dictionary may have been updated since (the
-    // realtime translator inserts new entries while the game runs). Re-check
-    // it synchronously so a one-time miss does not stick forever.
-    if let Some(response) = do_translate(request) {
-      cache.insert(key.to_owned(), Some(response.clone()));
-      return Some(response);
-    }
-    return None;
+    // return cached response (Some or None): trusting the cache avoids
+    // re-running the (potentially expensive) ruleset matcher on every render
+    return cached.clone();
   }
 
   // Try the in-memory dictionary synchronously before going async. This is a
@@ -102,6 +93,28 @@ pub fn translate(request: &translation::TranslationRequest) -> Option<translatio
 // re-evaluated on the next request.
 pub fn clear_cache() {
   get_caches_mut().clear();
+}
+
+// Fast main-thread-safe lookup used by the render hooks: consults ONLY the
+// simple in-memory dictionary (no ruleset matcher, no cache write lock, no
+// async spawn). Strings covered by the rulesets still become Chinese one frame
+// later when the async translate task fills the cache.
+pub fn simple_translate(request: &translation::TranslationRequest) -> Option<translation::TranslationResponse> {
+  if request.original() == game::version() {
+    let translated = format!(
+      "{} + {}-{} v{}",
+      game::version(),
+      crate::MOD_NAME,
+      game::os_platform(),
+      game::mod_version()
+    );
+    return Some(translation::TranslationResponse {
+      translated,
+      alignment: translation::TextAlignment::default(),
+    });
+  }
+  let lang_tag = lang::current_lang_tag();
+  simple::translate(&lang_tag, request.context())
 }
 
 // The translation task that performs the actual translation

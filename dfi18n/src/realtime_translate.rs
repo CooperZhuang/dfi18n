@@ -326,10 +326,13 @@ async fn run_loop() {
       translator::insert_translation(s, t);
     }
     translator::clear_cache();
-    log::debug!("dictionary_update inserted={} cache=cleared", entries.len());
-
-    crate::text::reset();
-    crate::screen::retranslate_all();
+    // Do not call text::reset/retranslate_all here. Rebuilding markup blocks
+    // costs 1.6-2.5 seconds of CPU for a normal personality screen and can
+    // still miss because the game changes its screen list concurrently. The
+    // next addst/addcoloredst render observes the cleared cache and performs a
+    // synchronous in-memory lookup, so translation becomes effective without a
+    // multi-second CPU spike.
+    log::debug!("dictionary_update inserted={} cache=cleared redraw=deferred_to_next_render", entries.len());
 
     if let Some(dir) = find_data_dir() {
       let written = append_to_csv(&dir, &entries);
