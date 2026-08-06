@@ -148,37 +148,55 @@ fn find_data_dir() -> Option<PathBuf> {
   None
 }
 
-fn append_to_csv(data_dir: &std::path::Path, entries: &[(String, String)]) {
+fn append_to_csv(data_dir: &std::path::Path, entries: &[(String, String)]) -> usize {
   let path = data_dir.join("ai_fill.csv");
   if !path.is_file() {
-    let _ = std::fs::write(&path, "text,translation,tags\n");
-  }
-  use std::io::Write;
-  if let Ok(mut f) = std::fs::OpenOptions::new().append(true).open(&path) {
-    for (s, t) in entries {
-      if s == t || t.is_empty() {
-        continue;
-      }
-      let esc = |v: &str| {
-        if v.contains(',') || v.contains('"') || v.contains('\n') {
-          format!("\"{}\"", v.replace('"', "\"\""))
-        } else {
-          v.to_string()
-        }
-      };
-      let _ = writeln!(f, "{},{},", esc(s), esc(t));
+    if let Err(e) = std::fs::write(&path, "text,translation,tags\n") {
+      log::warn!("csv_append status=header_error path={:?} error={}", path, e);
+      return 0;
     }
   }
+  use std::io::Write;
+  let mut f = match std::fs::OpenOptions::new().append(true).open(&path) {
+    Ok(f) => f,
+    Err(e) => {
+      log::warn!("csv_append status=open_error path={:?} error={}", path, e);
+      return 0;
+    }
+  };
+  let mut written = 0usize;
+  for (s, t) in entries {
+    if s == t || t.is_empty() {
+      log::debug!("csv_append status=skipped original={:?} translated={:?}", s, t);
+      continue;
+    }
+    let esc = |v: &str| {
+      if v.contains(',') || v.contains('"') || v.contains('\n') {
+        format!("\"{}\"", v.replace('"', "\"\""))
+      } else {
+        v.to_string()
+      }
+    };
+    match writeln!(f, "{},{},", esc(s), esc(t)) {
+      Ok(_) => written += 1,
+      Err(e) => log::warn!("csv_append status=write_error path={:?} original={:?} error={}", path, s, e),
+    }
+  }
+  log::debug!("csv_append status=complete path={:?} requested={} written={}", path, entries.len(), written);
+  written
 }
 
 // Translate a batch via the API (sync; call via spawn_blocking).
 fn translate_batch(cfg: &Config, api_key: &str, batch: &[String]) -> Vec<(String, String)> {
   use serde_json::json;
+  let started = std::time::Instant::now();
+  log::debug!("realtime_batch status=request model={:?} count={} originals={:?}", cfg.model, batch.len(), batch);
   let prompt = format!(
     "你是矮人要塞(Dwarf Fortress)简体中文专业译者。把以下英文界面/描述/想法文本逐条翻译成简体中文。\n\
      规则：\n\
      - translations 是 JSON 数组, 数量与输入完全一致, 第 i 个元素是第 i 条翻译(严格按顺序)。\n\
      - 保留占位/标记/数字/标点(如 [R]、-->、*、括号、's、斜杠)。\n\
+     - 保留所有 [C:r:g:b] 颜色标记及其顺序。\n\
      - 内部标识/无意义串原样保留不译。\n\
      - 只输出 JSON 对象 {{\"translations\": [...]}}。\n\n\
      输入(JSON数组, {n}条)：\n{src}",
@@ -200,30 +218,39 @@ fn translate_batch(cfg: &Config, api_key: &str, batch: &[String]) -> Vec<(String
       v["choices"][0]["message"]["content"].as_str().map(|s| s.to_string())
     }),
     Err(e) => {
-      log::warn!("realtime_translate: API error: {e}");
+      log::warn!("realtime_batch status=api_error elapsed_ms={} error={}", started.elapsed().as_millis(), e);
       None
     }
   };
   let content = match content {
     Some(c) => c,
-    None => return Vec::new(),
+    None => {
+      log::warn!("realtime_batch status=missing_content elapsed_ms={}", started.elapsed().as_millis());
+      return Vec::new();
+    }
   };
-  // extract JSON array from the response
-  let start = content.find('[');
-  let end = content.rfind(']');
-  let translations = match (start, end) {
-    (Some(a), Some(b)) if b > a => serde_json::from_str::<Vec<String>>(&content[a..=b]).ok(),
-    _ => None,
+  let translations = content
+    .find('[')
+    .zip(content.rfind(']'))
+    .filter(|(a, b)| b > a)
+    .and_then(|(a, b)| serde_json::from_str::<Vec<String>>(&content[a..=b]).ok());
+  let list = match translations {
+    Some(list) if list.len() == batch.len() => list,
+    Some(list) => {
+      log::warn!("realtime_batch status=count_mismatch expected={} actual={} raw={:?}", batch.len(), list.len(), content);
+      return Vec::new();
+    }
+    None => {
+      log::warn!("realtime_batch status=parse_error raw={:?}", content);
+      return Vec::new();
+    }
   };
-  match translations {
-    Some(list) if list.len() == batch.len() => batch
-      .iter()
-      .cloned()
-      .zip(list)
-      .filter(|(_, t)| !t.is_empty() && t != batch.iter().find(|_| false).unwrap_or(&String::new()))
-      .collect(),
-    _ => Vec::new(),
+  let entries: Vec<_> = batch.iter().cloned().zip(list).filter(|(s, t)| !t.is_empty() && t != s).collect();
+  for (original, translated) in &entries {
+    log::debug!("realtime_entry original={:?} translated={:?}", original, translated);
   }
+  log::debug!("realtime_batch status=complete elapsed_ms={} requested={} translated={}", started.elapsed().as_millis(), batch.len(), entries.len());
+  entries
 }
 
 /// Background loop: periodically drain the queue, translate, update dict + CSV.
@@ -233,63 +260,84 @@ async fn run_loop() {
 
     let key = match read_key() {
       Some(k) => k,
-      None => continue, // no key configured: disabled
+      None => continue,
     };
     let cfg = read_config();
 
-    // drain up to batch_max queued strings not already requested / in dict
+    // Drain up to batch_max unique strings that are not already in the exact
+    // simple dictionary. Queue/request locks are held only for this short move.
     let mut batch = Vec::new();
+    let mut skipped_requested = 0usize;
+    let mut skipped_translated = 0usize;
+    let remaining;
     {
       let mut q = queue().lock();
       let mut req = requested().lock();
       let mut keep = Vec::new();
       for s in q.drain(..) {
-        if req.contains(&s) || translator::is_translated(&s) {
+        if req.contains(&s) {
+          skipped_requested += 1;
+          continue;
+        }
+        if translator::is_translated(&s) {
+          skipped_translated += 1;
           continue;
         }
         if batch.len() < cfg.batch_max {
-          batch.push(s.clone());
-          req.insert(s);
+          req.insert(s.clone());
+          batch.push(s);
         } else {
           keep.push(s);
         }
       }
+      remaining = keep.len();
       *q = keep;
     }
     if batch.is_empty() {
-      // No API work: synchronous dictionary lookup handles subsequent renders.
-      // Do not sweep the whole screen every tick; that competes with the game
-      // renderer and was the source of periodic stutter.
       continue;
     }
+    log::debug!(
+      "realtime_queue drained={} remaining={} skipped_requested={} skipped_translated={}",
+      batch.len(),
+      remaining,
+      skipped_requested,
+      skipped_translated
+    );
 
+    let batch_count = batch.len();
+    let api_started = std::time::Instant::now();
     let cfg2 = cfg.clone();
     let key2 = key.clone();
     let entries = tokio::task::spawn_blocking(move || translate_batch(&cfg2, &key2, &batch))
       .await
       .unwrap_or_default();
+    log::debug!(
+      "realtime_batch status=worker_complete elapsed_ms={} requested={} returned={}",
+      api_started.elapsed().as_millis(),
+      batch_count,
+      entries.len()
+    );
 
-    if !entries.is_empty() {
-      // update in-memory dict so the composer rewrite / classic path pick it up
-      for (s, t) in &entries {
-        translator::insert_translation(s, t);
-      }
-      // drop the translation cache so previously-missed keys are re-evaluated
-      // against the updated dictionary on their next render
-      translator::clear_cache();
-      // re-translate already-rendered text blocks in place (English -> Chinese)
-      crate::text::reset();
-      crate::screen::retranslate_all();
-      // persist
-      if let Some(dir) = find_data_dir() {
-        append_to_csv(&dir, &entries);
-      }
-      log::info!("realtime_translate: translated {} new strings", entries.len());
-    } else {
-      // No entries changed; avoid a full-screen sweep. The next render will
-      // use the current dictionary and cache state.
+    if entries.is_empty() {
       continue;
     }
+
+    for (s, t) in &entries {
+      translator::insert_translation(s, t);
+    }
+    translator::clear_cache();
+    log::debug!("dictionary_update inserted={} cache=cleared", entries.len());
+
+    crate::text::reset();
+    crate::screen::retranslate_all();
+
+    if let Some(dir) = find_data_dir() {
+      let written = append_to_csv(&dir, &entries);
+      log::debug!("dictionary_update csv_written={} dir={:?}", written, dir);
+    } else {
+      log::warn!("dictionary_update csv status=data_dir_not_found inserted={}", entries.len());
+    }
+    log::info!("realtime_translate: translated {} new strings", entries.len());
   }
 }
 

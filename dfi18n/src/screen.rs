@@ -97,6 +97,7 @@ pub fn get_text_blocks(layer: Layer) -> Vec<(u16, types::Coordinate, text::TextB
 //   - Blocks that already contain CJK are skipped (nothing to do).
 //   - Updates are applied under a short write lock, matched by original string.
 pub fn retranslate_all() {
+  let started = std::time::Instant::now();
   // snapshot (layer, coord, original, color_pair) under a read lock (cheap)
   let snapshot: Vec<(usize, types::Coordinate, String, types::ColorPair)> = {
     let screens = get_screens();
@@ -111,6 +112,7 @@ pub fn retranslate_all() {
     }
     v
   };
+  let snapshot_count = snapshot.len();
 
   // translate + build new blocks WITHOUT any screen lock (the slow part)
   let mut updates: Vec<(usize, String, text::TextBlock)> = Vec::new(); // (layer, original, block)
@@ -126,7 +128,6 @@ pub fn retranslate_all() {
     };
     if let Some(response) = translator::do_translate(&request) {
       let block = if original.contains("[C:") {
-        // rebuild via markup parsing so color codes render correctly
         let m = markup::get(&response.translated);
         m.text_block()
       } else {
@@ -135,8 +136,11 @@ pub fn retranslate_all() {
       updates.push((li, original, block));
     }
   }
+  let update_count = updates.len();
+  let build_ms = started.elapsed().as_millis();
 
   // apply under a short write lock, matched by original string
+  let mut applied = 0usize;
   if !updates.is_empty() {
     let mut screens = get_screens_mut();
     for (li, original, new_block) in updates {
@@ -144,11 +148,20 @@ pub fn retranslate_all() {
       for entry in screen.iter_mut() {
         if entry.2.original_str() == original {
           entry.2 = new_block.clone();
+          applied += 1;
           break;
         }
       }
     }
   }
+  log::debug!(
+    "retranslate_trace snapshot={} updates={} applied={} build_ms={} total_ms={}",
+    snapshot_count,
+    update_count,
+    applied,
+    build_ms,
+    started.elapsed().as_millis()
+  );
 }
 
 // Checks if any DFHack occupied tile exists within the specified rectangle
